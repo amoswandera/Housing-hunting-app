@@ -84,11 +84,20 @@ app.get('/api/superadmin/users', requireSession, requireSuperAdmin, (_request, r
   response.json(database.prepare('SELECT id, name, identifier, role, phone, company, created_at AS createdAt FROM users ORDER BY created_at DESC').all())
 })
 
-app.patch('/api/superadmin/users/:id/role', requireSession, requireSuperAdmin, (request, response) => {
-  if (!['Tenant', 'Agent', 'SuperAdmin'].includes(request.body.role)) return response.status(400).json({ error: 'Invalid role.' })
-  const result = database.prepare('UPDATE users SET role = ? WHERE id = ?').run(request.body.role, request.params.id)
-  if (!result.changes) return response.status(404).json({ error: 'User not found.' })
-  response.json({ ok: true })
+app.post('/api/superadmin/users', requireSession, requireSuperAdmin, (request, response) => {
+  const { name, identifier, password, role } = request.body
+  const normalizedIdentifier = normalizeIdentifier(identifier)
+  if (!name?.trim() || !isValidIdentifier(normalizedIdentifier)) return response.status(400).json({ error: 'Enter a valid name and email or phone number.' })
+  if (!password || password.length < 8) return response.status(400).json({ error: 'Password must be at least 8 characters long.' })
+  if (!['Tenant', 'Agent', 'SuperAdmin'].includes(role)) return response.status(400).json({ error: 'Choose Tenant, Agent or SuperAdmin.' })
+  try {
+    const result = database.prepare('INSERT INTO users (name, identifier, password_hash, role) VALUES (?, ?, ?, ?)').run(name.trim(), normalizedIdentifier, hashPassword(password), role)
+    const user = database.prepare('SELECT id, name, identifier, role, phone, company, created_at AS createdAt FROM users WHERE id = ?').get(result.lastInsertRowid)
+    response.status(201).json({ user })
+  } catch (error) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return response.status(409).json({ error: 'An account with this email or phone number already exists.' })
+    response.status(500).json({ error: 'Could not create the account.' })
+  }
 })
 
 app.delete('/api/superadmin/users/:id', requireSession, requireSuperAdmin, (request, response) => {
@@ -159,7 +168,7 @@ app.post('/api/auth/register', (request, response) => {
   const normalizedIdentifier = normalizeIdentifier(identifier)
   if (!name?.trim() || !isValidIdentifier(normalizedIdentifier)) return response.status(400).json({ error: 'Enter a valid name and email or phone number.' })
   if (!password || password.length < 8) return response.status(400).json({ error: 'Password must be at least 8 characters long.' })
-  if (!['Tenant', 'Agent'].includes(role)) return response.status(400).json({ error: 'Select Tenant or Agent. SuperAdmin accounts are created by the system.' })
+  if (role !== 'Tenant') return response.status(403).json({ error: 'Only tenant accounts can be self-registered. Agents and admins are added by an administrator.' })
   try {
     const result = database.prepare('INSERT INTO users (name, identifier, password_hash, role) VALUES (?, ?, ?, ?)').run(name.trim(), normalizedIdentifier, hashPassword(password), role)
     const user = database.prepare('SELECT id, name, identifier, role FROM users WHERE id = ?').get(result.lastInsertRowid)

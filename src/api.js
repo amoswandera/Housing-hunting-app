@@ -45,5 +45,5 @@ export const requestPayment = (id, phone, amount, token) => request(`/applicatio
 export const cancelApplication = (id, token) => request(`/applications/${id}/cancel`, { method: 'PATCH', token })
 export const fetchSuperAdminOverview = (token) => request('/superadmin/overview', { token })
 export const fetchSuperAdminUsers = (token) => request('/superadmin/users', { token })
-export const updateSuperAdminUserRole = (id, role, token) => request(`/superadmin/users/${id}/role`, { method: 'PATCH', body: { role }, token })
+export const createSuperAdminUser = (account, token) => request('/superadmin/users', { method: 'POST', body: account, token })
 export const deleteSuperAdminUser = (id, token) => request(`/superadmin/users/${id}`, { method: 'DELETE', token })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, deleteSuperAdminUser, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, submitApplication, updateProfile, updateSuperAdminUserRole } from './api'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminUser, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, submitApplication, updateProfile } from './api'
 import './App.css'
 
 const initialHomes = [
@@ -408,7 +408,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
     }
   }
 
-  return <main className="auth-page"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark">h</span> habitat</div><div className="auth-copy"><p className="eyebrow">A better way home</p><h1>Find your next<br /><em>chapter.</em></h1><p>Explore thoughtfully selected homes and make your move with confidence.</p></div><div className="auth-art"><div className="auth-sun"></div><div className="auth-hill auth-hill-one"></div><div className="auth-hill auth-hill-two"></div><div className="auth-house">⌂</div></div></section><section className="auth-panel"><div className="auth-panel-inner"><p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your journey'}</p><h2>{mode === 'login' ? 'Sign in to habitat' : 'Create your account'}</h2><p className="auth-subtitle">{mode === 'login' ? 'Sign in to save homes and book a property.' : 'Create an account before booking a home.'}</p><form onSubmit={submitForm}>{mode === 'register' && <label>Full name<input type="text" value={name} onChange={(event) => { setName(event.target.value); setError('') }} placeholder="Your full name" /></label>}<label>Email address<input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com" /></label><label>Password<div className="password-field"><input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />{mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}</div></label>{mode === 'register' && <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} placeholder="Repeat your password" /></label>}<fieldset><legend>{mode === 'login' ? 'Sign in as' : 'Create account as'}</legend><div className="auth-role-options">{(mode === 'login' ? [['Tenant', 'Tenant'], ['Agent', 'Agent'], ['SuperAdmin', 'Admin']] : [['Tenant', 'Tenant'], ['Agent', 'Agent']]).map(([value, label]) => <button type="button" key={value} className={role === value ? 'active' : ''} onClick={() => setRole(value)}><span>{value === 'Tenant' ? '⌂' : value === 'Agent' ? '▣' : '◆'}</span>{label}</button>)}</div></fieldset>{error && <p className="auth-error">{error}</p>}{success && <p className="auth-success">{success}</p>}<button className="auth-submit" type="submit">{mode === 'login' ? `Continue to ${role.toLowerCase()} dashboard` : 'Create account'} <span>→</span></button></form><button className="auth-mode-toggle" onClick={() => { const next = mode === 'login' ? 'register' : 'login'; if (next === 'register' && role === 'SuperAdmin') setRole('Tenant'); setMode(next); setError(''); setSuccess('') }}>{mode === 'login' ? 'New to habitat? Create an account' : 'Already have an account? Sign in'}</button>{onBrowseHomes && <button className="guest-browse-button" onClick={onBrowseHomes}>Continue browsing homes as a guest</button>}<p className="auth-note">You can browse homes without an account. Sign in is required to book.</p></div></section></main>
+  return <main className="auth-page"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark">h</span> habitat</div><div className="auth-copy"><p className="eyebrow">A better way home</p><h1>Find your next<br /><em>chapter.</em></h1><p>Explore thoughtfully selected homes and make your move with confidence.</p></div><div className="auth-art"><div className="auth-sun"></div><div className="auth-hill auth-hill-one"></div><div className="auth-hill auth-hill-two"></div><div className="auth-house">⌂</div></div></section><section className="auth-panel"><div className="auth-panel-inner"><p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your journey'}</p><h2>{mode === 'login' ? 'Sign in to habitat' : 'Create your account'}</h2><p className="auth-subtitle">{mode === 'login' ? 'Sign in to save homes and book a property.' : 'Create a tenant account to book a home. Agents and admins are added by the Habitat team.'}</p><form onSubmit={submitForm}>{mode === 'register' && <label>Full name<input type="text" value={name} onChange={(event) => { setName(event.target.value); setError('') }} placeholder="Your full name" /></label>}<label>Email address<input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com" /></label><label>Password<div className="password-field"><input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />{mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}</div></label>{mode === 'register' && <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} placeholder="Repeat your password" /></label>}{mode === 'login' && <fieldset><legend>Sign in as</legend><div className="auth-role-options">{[['Tenant', 'Tenant'], ['Agent', 'Agent'], ['SuperAdmin', 'Admin']].map(([value, label]) => <button type="button" key={value} className={role === value ? 'active' : ''} onClick={() => setRole(value)}><span>{value === 'Tenant' ? '⌂' : value === 'Agent' ? '▣' : '◆'}</span>{label}</button>)}</div></fieldset>}{error && <p className="auth-error">{error}</p>}{success && <p className="auth-success">{success}</p>}<button className="auth-submit" type="submit">{mode === 'login' ? `Continue to ${role.toLowerCase()} dashboard` : 'Create account'} <span>→</span></button></form><button className="auth-mode-toggle" onClick={() => { const next = mode === 'login' ? 'register' : 'login'; if (next === 'register') setRole('Tenant'); setMode(next); setError(''); setSuccess('') }}>{mode === 'login' ? 'New to habitat? Create an account' : 'Already have an account? Sign in'}</button>{onBrowseHomes && <button className="guest-browse-button" onClick={onBrowseHomes}>Continue browsing homes as a guest</button>}<p className="auth-note">You can browse homes without an account. Sign in is required to book.</p></div></section></main>
 }
 
 function SuperAdminPanel({ token, currentUserId, onNotify }) {
@@ -416,6 +416,10 @@ function SuperAdminPanel({ token, currentUserId, onNotify }) {
   const [users, setUsers] = useState([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const emptyNewUser = { name: '', identifier: '', password: '', role: 'Agent' }
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [newUser, setNewUser] = useState(emptyNewUser)
+  const [saving, setSaving] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -432,14 +436,16 @@ function SuperAdminPanel({ token, currentUserId, onNotify }) {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const changeUserRole = async (user, nextRole) => {
-    if (nextRole === user.role) return
+  const createUser = async (event) => {
+    event.preventDefault()
+    setSaving(true)
     try {
-      await updateSuperAdminUserRole(user.id, nextRole, token)
-      setUsers((current) => current.map((item) => (item.id === user.id ? { ...item, role: nextRole } : item)))
-      onNotify(`${user.name} is now a ${nextRole}.`)
+      const { user } = await createSuperAdminUser(newUser, token)
+      onNotify(`${user.name} was added as a ${user.role}.`)
+      setNewUser(emptyNewUser)
+      setShowAddUser(false)
       loadData()
-    } catch (error) { onNotify(error.message) }
+    } catch (error) { onNotify(error.message) } finally { setSaving(false) }
   }
 
   const removeUser = async (user) => {
@@ -474,13 +480,20 @@ function SuperAdminPanel({ token, currentUserId, onNotify }) {
     </div>
     <div className="stat-grid">{stats.map((stat) => <div key={stat.label}><span>{stat.label}</span><strong>{loading || stat.value == null ? '—' : stat.value}</strong><small>{stat.hint}</small></div>)}</div>
     <div className="table-panel user-panel">
-      <div className="table-title"><h2>Application users</h2><span>{filteredUsers.length} of {users.length} accounts</span></div>
+      <div className="table-title"><h2>Application users</h2><span>{filteredUsers.length} of {users.length} accounts</span><button className="add-user-button" onClick={() => setShowAddUser((current) => !current)}>{showAddUser ? 'Close' : '+ Add user'}</button></div>
+      {showAddUser && <form className="add-user-form" onSubmit={createUser}>
+        <label>Full name<input required value={newUser.name} onChange={(event) => setNewUser({ ...newUser, name: event.target.value })} placeholder="Jane Wanjiru" /></label>
+        <label>Email or phone<input required value={newUser.identifier} onChange={(event) => setNewUser({ ...newUser, identifier: event.target.value })} placeholder="jane@example.com or 0712345678" /></label>
+        <label>Temporary password<input required type="password" value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} placeholder="At least 8 characters" /></label>
+        <label>Role<select value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value })}><option value="Agent">Agent</option><option value="Tenant">Tenant</option><option value="SuperAdmin">SuperAdmin</option></select></label>
+        <button className="primary-action" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add user'} <span>→</span></button>
+      </form>}
       <div className="search-field admin-user-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, role or company" /></div>
       {filteredUsers.map((user) => <div className="user-row" key={user.id}>
         <div className="avatar">{user.name.slice(0, 2).toUpperCase()}</div>
         <div><strong>{user.name}{user.id === currentUserId && <em> (you)</em>}</strong><span>{user.identifier}{user.company ? ` · ${user.company}` : ''}</span></div>
-        <select value={user.role} onChange={(event) => changeUserRole(user, event.target.value)}><option value="Tenant">Tenant</option><option value="Agent">Agent</option><option value="SuperAdmin">SuperAdmin</option></select>
-        <button className="remove-user" disabled={user.id === currentUserId} onClick={() => removeUser(user)}>Remove</button>
+        <span className="role-static">{user.role}</span>
+        {user.id === currentUserId ? <span /> : <button className="remove-user" onClick={() => removeUser(user)}>Remove</button>}
       </div>)}
       {!loading && filteredUsers.length === 0 && <div className="empty-state"><strong>No users found</strong><span>Try a different search.</span></div>}
     </div>
