@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, loginUser, registerUser, requestPayment, submitApplication, updateProfile } from './api'
+import { cancelApplication, cancelBooking as cancelBookingApi, deleteSuperAdminUser, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, submitApplication, updateProfile, updateSuperAdminUserRole } from './api'
 import './App.css'
 
 const initialHomes = [
@@ -135,11 +135,26 @@ const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 const isValidPhone = (value) => /^(?:\+254|0)(?:1|7)\d{8}$/.test(value)
 const isValidIdentifier = (value) => isValidEmail(value) || isValidPhone(value)
 
+// Persist the signed-in user per browser tab. sessionStorage (not localStorage)
+// is used on purpose: it survives a page refresh so the user stays logged in,
+// but is scoped to a single tab so you can open a second tab and sign in as a
+// different user without the two sessions overwriting each other.
+const SESSION_KEY = 'habitat.authUser'
+const readStoredUser = () => {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 function App() {
-  const [authUser, setAuthUser] = useState(null)
+  const storedUser = readStoredUser()
+  const [authUser, setAuthUser] = useState(storedUser)
   const [accounts, setAccounts] = useState([])
   const [showAuthScreen, setShowAuthScreen] = useState(false)
-  const [role, setRole] = useState('Tenant')
+  const [role, setRole] = useState(storedUser?.role || 'Tenant')
   const [region, setRegion] = useState('All regions')
   const [category, setCategory] = useState('All categories')
   const [query, setQuery] = useState('')
@@ -167,9 +182,29 @@ function App() {
     }).catch(() => {})
   }, [authUser])
 
+  // Keep this tab's sessionStorage in sync with the signed-in user so a refresh
+  // rehydrates the session instead of dropping the user back to the home page.
   useEffect(() => {
-    if (authUser?.token) fetchProfile(authUser.token).then(setTenantProfile).catch(() => {})
+    try {
+      if (authUser) sessionStorage.setItem(SESSION_KEY, JSON.stringify(authUser))
+      else sessionStorage.removeItem(SESSION_KEY)
+    } catch { /* storage may be unavailable in private mode */ }
   }, [authUser])
+
+  useEffect(() => {
+    if (!authUser?.token) return
+    // Validate the restored token once on load. If the server was restarted its
+    // in-memory sessions are gone, so we clear the stale session cleanly.
+    fetchProfile(authUser.token)
+      .then((profile) => {
+        setTenantProfile(profile)
+        setAuthUser((current) => (current ? { ...current, ...profile } : current))
+      })
+      .catch(() => {
+        setAuthUser(null)
+        setRole('Tenant')
+      })
+  }, [authUser?.token])
 
   const filteredHomes = useMemo(() => homes.filter((home) => {
     const matchesRegion = region === 'All regions' || home.region === region
@@ -281,6 +316,8 @@ function App() {
         </>}
 
         {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} />}
+
+        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} />}
       </main>
 
       {selectedHome && <div className="modal-backdrop" onClick={() => setSelectedHome(null)}><div className="booking-modal" onClick={(event) => event.stopPropagation()}><button className="close-button" onClick={() => setSelectedHome(null)}>×</button><img className="modal-home-image" src={selectedHome.image} alt={`${selectedHome.name} interior`} /><div className="modal-content"><p className="eyebrow">{selectedHome.location}</p><h2>{selectedHome.name}</h2><p>{selectedHome.details} Submit an application and the agent will review it before you make any deposit payment.</p><div className="agent-profile"><div className="avatar">{(selectedHome.agent_name || 'Agent').slice(0, 2).toUpperCase()}</div><div><strong>{selectedHome.agent_name || 'House agent'}</strong><span>{selectedHome.agent_company || 'Habitat verified agent'}</span><small>{selectedHome.agent_phone || 'Contact details shared after application review'}</small></div></div><div className="fee-row"><div><span>Monthly rent</span><strong>{formatKes(selectedHome.price)}</strong></div><div><span>Deposit after approval</span><strong>{formatKes(selectedHome.deposit)}</strong></div></div><button className="primary-action" onClick={confirmBooking}>Send application <span>→</span></button><small>No payment is taken now. The agent will send a contract and paybill after approval.</small></div></div></div>}
@@ -371,65 +408,83 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
     }
   }
 
-  return <main className="auth-page"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark">h</span> habitat</div><div className="auth-copy"><p className="eyebrow">A better way home</p><h1>Find your next<br /><em>chapter.</em></h1><p>Explore thoughtfully selected homes and make your move with confidence.</p></div><div className="auth-art"><div className="auth-sun"></div><div className="auth-hill auth-hill-one"></div><div className="auth-hill auth-hill-two"></div><div className="auth-house">⌂</div></div></section><section className="auth-panel"><div className="auth-panel-inner"><p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your journey'}</p><h2>{mode === 'login' ? 'Sign in to habitat' : 'Create your account'}</h2><p className="auth-subtitle">{mode === 'login' ? 'Sign in to save homes and book a property.' : 'Create an account before booking a home.'}</p><form onSubmit={submitForm}>{mode === 'register' && <label>Full name<input type="text" value={name} onChange={(event) => { setName(event.target.value); setError('') }} placeholder="Your full name" /></label>}<label>Email address<input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com" /></label><label>Password<div className="password-field"><input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />{mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}</div></label>{mode === 'register' && <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} placeholder="Repeat your password" /></label>}<fieldset><legend>{mode === 'login' ? 'Sign in as' : 'Create account as'}</legend><div className="auth-role-options">{['Tenant', 'Agent', 'Admin'].map((item) => <button type="button" key={item} className={role === item ? 'active' : ''} onClick={() => setRole(item)}><span>{item === 'Tenant' ? '⌂' : item === 'Agent' ? '▣' : '◆'}</span>{item}</button>)}</div></fieldset>{error && <p className="auth-error">{error}</p>}{success && <p className="auth-success">{success}</p>}<button className="auth-submit" type="submit">{mode === 'login' ? `Continue to ${role.toLowerCase()} dashboard` : 'Create account'} <span>→</span></button></form><button className="auth-mode-toggle" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setSuccess('') }}>{mode === 'login' ? 'New to habitat? Create an account' : 'Already have an account? Sign in'}</button>{onBrowseHomes && <button className="guest-browse-button" onClick={onBrowseHomes}>Continue browsing homes as a guest</button>}<p className="auth-note">You can browse homes without an account. Sign in is required to book.</p></div></section></main>
+  return <main className="auth-page"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark">h</span> habitat</div><div className="auth-copy"><p className="eyebrow">A better way home</p><h1>Find your next<br /><em>chapter.</em></h1><p>Explore thoughtfully selected homes and make your move with confidence.</p></div><div className="auth-art"><div className="auth-sun"></div><div className="auth-hill auth-hill-one"></div><div className="auth-hill auth-hill-two"></div><div className="auth-house">⌂</div></div></section><section className="auth-panel"><div className="auth-panel-inner"><p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your journey'}</p><h2>{mode === 'login' ? 'Sign in to habitat' : 'Create your account'}</h2><p className="auth-subtitle">{mode === 'login' ? 'Sign in to save homes and book a property.' : 'Create an account before booking a home.'}</p><form onSubmit={submitForm}>{mode === 'register' && <label>Full name<input type="text" value={name} onChange={(event) => { setName(event.target.value); setError('') }} placeholder="Your full name" /></label>}<label>Email address<input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com" /></label><label>Password<div className="password-field"><input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />{mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}</div></label>{mode === 'register' && <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} placeholder="Repeat your password" /></label>}<fieldset><legend>{mode === 'login' ? 'Sign in as' : 'Create account as'}</legend><div className="auth-role-options">{(mode === 'login' ? [['Tenant', 'Tenant'], ['Agent', 'Agent'], ['SuperAdmin', 'Admin']] : [['Tenant', 'Tenant'], ['Agent', 'Agent']]).map(([value, label]) => <button type="button" key={value} className={role === value ? 'active' : ''} onClick={() => setRole(value)}><span>{value === 'Tenant' ? '⌂' : value === 'Agent' ? '▣' : '◆'}</span>{label}</button>)}</div></fieldset>{error && <p className="auth-error">{error}</p>}{success && <p className="auth-success">{success}</p>}<button className="auth-submit" type="submit">{mode === 'login' ? `Continue to ${role.toLowerCase()} dashboard` : 'Create account'} <span>→</span></button></form><button className="auth-mode-toggle" onClick={() => { const next = mode === 'login' ? 'register' : 'login'; if (next === 'register' && role === 'SuperAdmin') setRole('Tenant'); setMode(next); setError(''); setSuccess('') }}>{mode === 'login' ? 'New to habitat? Create an account' : 'Already have an account? Sign in'}</button>{onBrowseHomes && <button className="guest-browse-button" onClick={onBrowseHomes}>Continue browsing homes as a guest</button>}<p className="auth-note">You can browse homes without an account. Sign in is required to book.</p></div></section></main>
 }
 
-/* eslint-disable no-unreachable, no-unused-vars */
-function LegacyManagementView({ title, subtitle, role, token, onNotify }) {
-  const [homes, setHomes] = useState([])
-  const [applications, setApplications] = useState([])
-  const [showForm, setShowForm] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
-  const [profile, setProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
-  const [form, setForm] = useState({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '' })
+function SuperAdminPanel({ token, currentUserId, onNotify }) {
+  const [overview, setOverview] = useState(null)
+  const [users, setUsers] = useState([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const loadData = useCallback(async () => {
-    if (role === 'Agent') {
-      const [managedHomes, receivedApplications] = await Promise.all([fetchManagedHomes(token), fetchAgentApplications(token)])
-      setHomes(managedHomes)
-      setApplications(receivedApplications)
-    }
-    return undefined
-  }, [role, token])
-
-  useEffect(() => {
-    const refreshTimer = window.setTimeout(() => loadData().catch((error) => onNotify(error.message)), 0)
-    return () => window.clearTimeout(refreshTimer)
-  }, [loadData, onNotify])
-  useEffect(() => {
-    fetchProfile(token).then(setProfile).catch(() => {})
-  }, [token])
-
-  const submitHome = async (event) => {
-    event.preventDefault()
+    setLoading(true)
     try {
-      await createHome(form, token)
-      setForm({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '' })
-      setShowForm(false)
-      await loadData()
-      onNotify('New vacant home published.')
+      const [stats, people] = await Promise.all([fetchSuperAdminOverview(token), fetchSuperAdminUsers(token)])
+      setOverview(stats)
+      setUsers(people)
+    } catch (error) {
+      onNotify(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [token, onNotify])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  const changeUserRole = async (user, nextRole) => {
+    if (nextRole === user.role) return
+    try {
+      await updateSuperAdminUserRole(user.id, nextRole, token)
+      setUsers((current) => current.map((item) => (item.id === user.id ? { ...item, role: nextRole } : item)))
+      onNotify(`${user.name} is now a ${nextRole}.`)
+      loadData()
     } catch (error) { onNotify(error.message) }
   }
 
-  const toggleAvailability = async (home) => {
-    try { await updateHomeAvailability(home.id, !home.available, token); await loadData(); onNotify(home.available ? 'Home marked as taken.' : 'Home marked as available.') } catch (error) { onNotify(error.message) }
+  const removeUser = async (user) => {
+    if (user.id === currentUserId) { onNotify('You cannot remove your own super-admin account.'); return }
+    if (!window.confirm(`Remove ${user.name}? This permanently deletes the account.`)) return
+    try {
+      await deleteSuperAdminUser(user.id, token)
+      setUsers((current) => current.filter((item) => item.id !== user.id))
+      onNotify(`${user.name} was removed.`)
+      loadData()
+    } catch (error) { onNotify(error.message) }
   }
 
+  const filteredUsers = users.filter((user) => {
+    const haystack = `${user.name} ${user.identifier} ${user.role} ${user.company || ''}`.toLowerCase()
+    return haystack.includes(search.trim().toLowerCase())
+  })
 
-  const saveProfile = async (event) => {
-    event.preventDefault()
-    try { const savedProfile = await updateProfile(profile, token); setProfile(savedProfile); setShowProfile(false); onNotify('Agent profile updated.') } catch (error) { onNotify(error.message) }
-  }
+  const stats = [
+    { label: 'Total users', value: overview?.users, hint: 'All accounts' },
+    { label: 'Tenants', value: overview?.tenants, hint: 'House seekers' },
+    { label: 'Agents', value: overview?.agents, hint: 'Listing owners' },
+    { label: 'Homes', value: overview?.homes, hint: `${overview?.availableHomes ?? 0} available` },
+    { label: 'Applications', value: overview?.applications, hint: `${overview?.pendingApplications ?? 0} pending` },
+    { label: 'Deposit payments', value: overview?.payments, hint: 'Pending or paid' },
+  ]
 
-  const review = async (application, status) => {
-    const contractText = status === 'approved' ? window.prompt('Enter contract details for the tenant:', 'One-year tenancy contract. Deposit is refundable according to the signed agreement.') : ''
-    const paybill = status === 'approved' ? window.prompt('Enter the M-Pesa paybill number:', '') : ''
-    if (status === 'approved' && (!contractText || !paybill)) return
-    try { await reviewApplication(application.id, { status: status === 'approve' ? 'approved' : 'declined', contractText, paybill }, token); await loadData(); onNotify(`Application ${status === 'approve' ? 'approved' : 'declined'}.`) } catch (error) { onNotify(error.message) }
-  }
-  return <section className="management"><div className="management-header"><div><p className="eyebrow">{role === 'Admin' ? 'System control' : 'Your listings'}</p><h1>{title}</h1><p>{subtitle}</p></div><div className="management-actions"><button onClick={() => setShowForm((current) => !current)}>+ Add a new home <span>→</span></button>{role === 'Admin' && <button onClick={() => onNotify('Use the user table below to manage access.')}>Manage users <span>→</span></button>}</div></div>{showForm && <form className="listing-form" onSubmit={submitHome}><h2>Publish vacant home</h2><div className="form-grid"><label>Home name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Estate and town<input required placeholder="Kilimani, Nairobi" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label>County<select value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></label><label>Category<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></label><label>Monthly rent (KES)<input required type="number" min="1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label><label>Deposit (KES)<input required type="number" min="1" value={form.deposit} onChange={(event) => setForm({ ...form, deposit: event.target.value })} /></label><label>Photo URL<input required type="url" placeholder="https://..." value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} /></label><label>Short description<input value={form.details} onChange={(event) => setForm({ ...form, details: event.target.value })} /></label></div><label className="check-label"><input type="checkbox" checked={form.parking} onChange={(event) => setForm({ ...form, parking: event.target.checked })} /> Parking available</label><button className="primary-action form-submit" type="submit">Publish listing <span>→</span></button></form>}<div className="stat-grid"><div><span>{role === 'Admin' ? 'Total homes' : 'Your homes'}</span><strong>{homes.length}</strong><small>Managed in the database</small></div><div><span>Available homes</span><strong>{homes.filter((home) => home.available).length}</strong><small>Visible to tenants</small></div><div><span>{role === 'Admin' ? 'Platform users' : 'Taken homes'}</span><strong>{role === 'Admin' ? users.length : homes.filter((home) => !home.available).length}</strong><small>Live status</small></div></div>{role === 'Admin' && <div className="table-panel user-panel"><div className="table-title"><h2>Application users</h2><span>{users.length} accounts</span></div>{users.map((user) => <div className="user-row" key={user.id}><div className="avatar">{user.name.slice(0, 2).toUpperCase()}</div><div><strong>{user.name}</strong><span>{user.identifier}</span></div><select value={user.role} onChange={(event) => changeUserRole(user, event.target.value)}><option>Tenant</option><option>Agent</option><option>Admin</option></select><button className="remove-user" onClick={() => removeUser(user)}>Remove</button></div>)}</div>}<div className="table-panel"><div className="table-title"><h2>{role === 'Admin' ? 'All marketplace listings' : 'Your current listings'}</h2><button onClick={() => loadData()}>Refresh ↻</button></div>{homes.map((home) => <div className="listing-row" key={home.id}><img src={home.image} alt="" /><div><strong>{home.name}</strong><span>{home.location} · {home.type}</span></div><span className={`availability ${home.available ? '' : 'pending'}`}>{home.available ? 'Available' : 'Taken'}</span><strong>{formatKes(home.price)} <small>/ mo</small></strong><button className="availability-button" onClick={() => toggleAvailability(home)}>{home.available ? 'Mark taken' : 'Make available'}</button></div>)}</div></section>
-  return <section className="management"><div className="management-header"><div><p className="eyebrow">Your listings</p><h1>{title}</h1><p>{subtitle}</p></div><div className="management-actions"><button onClick={() => setShowForm((current) => !current)}>+ Add a new home <span>→</span></button><button onClick={() => setShowProfile((current) => !current)}>My agent profile <span>→</span></button></div></div>{showProfile && <form className="listing-form profile-form" onSubmit={saveProfile}><h2>Agent profile</h2><p className="form-help">These details are shown to tenants viewing your homes.</p><div className="form-grid"><label>Full name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Phone number<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Company or agency<input value={profile.company} onChange={(event) => setProfile({ ...profile, company: event.target.value })} /></label><label>Occupation<input value={profile.occupation} onChange={(event) => setProfile({ ...profile, occupation: event.target.value })} /></label><label className="wide-field">About you<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label></div><button className="primary-action form-submit" type="submit">Save profile <span>→</span></button></form>}{showForm && <form className="listing-form" onSubmit={submitHome}><h2>Publish vacant home</h2><div className="form-grid"><label>Home name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Estate and town<input required placeholder="Kilimani, Nairobi" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label>County<select value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></label><label>Category<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></label><label>Monthly rent (KES)<input required type="number" min="1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label><label>Deposit (KES)<input required type="number" min="1" value={form.deposit} onChange={(event) => setForm({ ...form, deposit: event.target.value })} /></label><label>Photo URL<input required type="url" placeholder="https://..." value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} /></label><label>Short description<input value={form.details} onChange={(event) => setForm({ ...form, details: event.target.value })} /></label></div><label className="check-label"><input type="checkbox" checked={form.parking} onChange={(event) => setForm({ ...form, parking: event.target.checked })} /> Parking available</label><button className="primary-action form-submit" type="submit">Publish listing <span>→</span></button></form>}{applications.length > 0 && <div className="table-panel application-panel"><div className="table-title"><h2>Tenant applications</h2><span>{applications.filter((item) => item.status === 'submitted').length} awaiting review</span></div>{applications.map((application) => <div className="agent-application" key={application.id}><div><strong>{application.tenant_name}</strong><span>{application.tenant_identifier} · {application.tenant_phone || 'No phone provided'}</span><small>{application.tenant_occupation || 'Occupation not provided'} · ID: {application.tenant_national_id || 'Not provided'}</small></div><div><strong>{application.name}</strong><span>{application.location}</span></div><span className={`application-status ${application.status}`}>{application.status}</span>{application.status === 'submitted' && <div className="review-actions"><button onClick={() => review(application, 'approve')}>Approve</button><button onClick={() => review(application, 'decline')}>Decline</button></div>}</div>)}</div>}<div className="stat-grid"><div><span>Your homes</span><strong>{homes.length}</strong><small>Managed in the database</small></div><div><span>Available homes</span><strong>{homes.filter((home) => home.available).length}</strong><small>Visible to tenants</small></div><div><span>Applications</span><strong>{applications.length}</strong><small>Tenant interest</small></div></div><div className="table-panel"><div className="table-title"><h2>Your current listings</h2><button onClick={() => loadData()}>Refresh ↻</button></div>{homes.map((home) => <div className="listing-row" key={home.id}><img src={home.image} alt="" /><div><strong>{home.name}</strong><span>{home.location} · {home.type}</span></div><span className={`availability ${home.available ? '' : 'pending'}`}>{home.available ? 'Available' : 'Taken'}</span><strong>{formatKes(home.price)} <small>/ mo</small></strong><button className="availability-button" onClick={() => toggleAvailability(home)}>{home.available ? 'Mark taken' : 'Make available'}</button></div>)}</div></section>
-
+  return <section className="management">
+    <div className="management-header">
+      <div><p className="eyebrow">System control</p><h1>Super-admin panel</h1><p>Monitor the platform and manage every account.</p></div>
+      <div className="management-actions"><button onClick={() => loadData()}>Refresh ↻</button></div>
+    </div>
+    <div className="stat-grid">{stats.map((stat) => <div key={stat.label}><span>{stat.label}</span><strong>{loading || stat.value == null ? '—' : stat.value}</strong><small>{stat.hint}</small></div>)}</div>
+    <div className="table-panel user-panel">
+      <div className="table-title"><h2>Application users</h2><span>{filteredUsers.length} of {users.length} accounts</span></div>
+      <div className="search-field admin-user-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, role or company" /></div>
+      {filteredUsers.map((user) => <div className="user-row" key={user.id}>
+        <div className="avatar">{user.name.slice(0, 2).toUpperCase()}</div>
+        <div><strong>{user.name}{user.id === currentUserId && <em> (you)</em>}</strong><span>{user.identifier}{user.company ? ` · ${user.company}` : ''}</span></div>
+        <select value={user.role} onChange={(event) => changeUserRole(user, event.target.value)}><option value="Tenant">Tenant</option><option value="Agent">Agent</option><option value="SuperAdmin">SuperAdmin</option></select>
+        <button className="remove-user" disabled={user.id === currentUserId} onClick={() => removeUser(user)}>Remove</button>
+      </div>)}
+      {!loading && filteredUsers.length === 0 && <div className="empty-state"><strong>No users found</strong><span>Try a different search.</span></div>}
+    </div>
+  </section>
 }
 
 export default App
