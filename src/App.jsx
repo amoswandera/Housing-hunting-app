@@ -168,6 +168,7 @@ function App() {
   const [paymentPhone, setPaymentPhone] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [showTenantProfile, setShowTenantProfile] = useState(false)
+  const [agentProfileNonce, setAgentProfileNonce] = useState(0)
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
 
   useEffect(() => {
@@ -284,6 +285,14 @@ function App() {
     try { const savedProfile = await updateProfile(tenantProfile, authUser.token); setTenantProfile(savedProfile); setShowTenantProfile(false); setAuthUser((current) => ({ ...current, ...savedProfile })); showToast('Your profile was updated.') } catch (error) { showToast(error.message) }
   }
 
+  // Opens the signed-in user's own profile from the sidebar profile card.
+  const openMyProfile = () => {
+    if (!authUser) { setShowAuthScreen(true); return }
+    if (authUser.role === 'Tenant') setShowTenantProfile(true)
+    else if (authUser.role === 'Agent') setAgentProfileNonce((current) => current + 1)
+    else showToast('Super-admin details are managed by the system.')
+  }
+
   if (showAuthScreen) {
     return <AuthScreen accounts={accounts} onLogin={login} onCreateAccount={createAccount} onBrowseHomes={() => setShowAuthScreen(false)} />
   }
@@ -292,7 +301,7 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">h</span><span>habitat</span></div>
-        <div className="profile-card"><div className="avatar">{authUser ? authUser.initials : 'G'}</div><div><strong>{authUser ? authUser.name : 'Guest visitor'}</strong><span>{authUser ? `${authUser.role} account` : 'Browse-only access'}</span></div><span className="chevron">⌄</span></div>
+        <div className="profile-card clickable" role="button" tabIndex={0} onClick={openMyProfile} onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openMyProfile()}><div className="avatar">{authUser ? authUser.initials : 'G'}</div><div><strong>{authUser ? authUser.name : 'Guest visitor'}</strong><span>{authUser ? `${authUser.role} account` : 'Browse-only access'}</span></div><span className="chevron">⌄</span></div>
         <nav className="main-nav">
           <button className="nav-item active"><span>⌂</span> Discover</button>
           <button className="nav-item" onClick={() => showToast(`${saved.length} homes saved`)}><span>♡</span> Saved <b>{saved.length}</b></button>
@@ -315,7 +324,7 @@ function App() {
           {applications.length > 0 && <section className="application-list"><div className="content-heading"><div><h2>My applications</h2><p>Applications are reviewed by each house agent.</p></div></div>{applications.map((application) => <div className="application-row" key={application.id}><div><strong>{application.name}</strong><span>{application.location}</span></div><span className={`application-status ${application.status}`}>{application.status}</span>{application.status === 'approved' && <div className="contract-box"><strong>Approved</strong><span>{application.contract_pdf_url ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer">View contract PDF ↗</a> : 'Contract PDF pending'}</span><small>{application.paybill_pdf_url ? <a href={application.paybill_pdf_url} target="_blank" rel="noreferrer">View paybill PDF ↗</a> : 'Paybill PDF pending'}</small>{application.payment_status !== 'paid' && <button onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>Make payment</button>}{application.payment_status === 'pending' && <small>Payment prompt sent to {application.payment_phone}.</small>}{application.payment_status === 'paid' && <small>Deposit payment recorded.</small>}</div>}{application.status === 'submitted' && <button onClick={() => cancelBooking(application.home_id)}>Cancel application</button>}</div>)}</section>}
         </>}
 
-        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} />}
+        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} />}
 
         {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} />}
       </main>

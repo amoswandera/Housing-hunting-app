@@ -3,7 +3,7 @@ import { fetchAgentApplications, fetchManagedHomes, fetchProfile, reviewApplicat
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
 
-function AgentDashboard({ token, onNotify }) {
+function AgentDashboard({ token, onNotify, openProfileNonce }) {
   const [homes, setHomes] = useState([])
   const [applications, setApplications] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -38,6 +38,11 @@ function AgentDashboard({ token, onNotify }) {
     }
     load()
   }, [onNotify, token])
+
+  // Open the profile form when the sidebar profile card is clicked.
+  useEffect(() => {
+    if (openProfileNonce) setShowProfile(true)
+  }, [openProfileNonce])
 
   const submitHome = async (event) => {
     event.preventDefault()
