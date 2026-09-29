@@ -7,12 +7,20 @@ import { extname, join } from 'node:path'
 import database from './database.js'
 
 const app = express()
+app.set('trust proxy', 1)
 const port = process.env.PORT || 3001
 const sessions = new Map()
 
+// Where uploaded files live. On a host with a persistent disk, set DATA_DIR
+// (e.g. /data) so files survive restarts. Falls back to a local folder.
+const dataDir = process.env.DATA_DIR || process.cwd()
+// Public web address of this server. On Render set PUBLIC_URL to your service
+// URL (https://your-app.onrender.com); otherwise it is worked out per request.
+const publicBaseUrl = (request) => (process.env.PUBLIC_URL || `${request.protocol}://${request.get('host')}`).replace(/\/$/, '')
+
 app.use(cors())
 app.use(express.json())
-const uploadDirectory = join(process.cwd(), 'public', 'uploads')
+const uploadDirectory = join(dataDir, 'public', 'uploads')
 mkdirSync(uploadDirectory, { recursive: true })
 const upload = multer({
   dest: uploadDirectory,
@@ -111,7 +119,7 @@ app.post('/api/uploads/house-image', requireSession, requireAgent, upload.single
   if (!request.file) return response.status(400).json({ error: 'Choose a JPG, PNG, WEBP, or GIF image under 8MB.' })
   const filename = `${request.file.filename}${extname(request.file.originalname).toLowerCase() || '.jpg'}`
   renameSync(request.file.path, join(uploadDirectory, filename))
-  response.status(201).json({ url: `http://localhost:${port}/uploads/${filename}` })
+  response.status(201).json({ url: `${publicBaseUrl(request)}/uploads/${filename}` })
 })
 
 app.use((error, _request, response, next) => {
@@ -128,7 +136,7 @@ app.post('/api/uploads/document', requireSession, requireAgent, pdfUpload.single
   if (!request.file) return response.status(400).json({ error: 'Choose a PDF document under 10MB.' })
   const filename = `${request.file.filename}.pdf`
   renameSync(request.file.path, join(uploadDirectory, filename))
-  response.status(201).json({ url: `http://localhost:${port}/uploads/${filename}` })
+  response.status(201).json({ url: `${publicBaseUrl(request)}/uploads/${filename}` })
 })
 
 app.get('/api/homes', (request, response) => {
@@ -273,4 +281,4 @@ app.patch('/api/bookings/:id/cancel', requireSession, (request, response) => {
   response.json({ status: 'refunded' })
 })
 
-app.listen(port, () => console.log(`Habitat API running at http://localhost:${port}`))
+app.listen(port, '0.0.0.0', () => console.log(`Habitat API running on port ${port}`))

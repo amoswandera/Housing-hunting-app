@@ -3,7 +3,10 @@ import crypto from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-const databasePath = join(process.cwd(), 'data', 'habitat.db')
+// On a host with a persistent disk, set DATA_DIR (e.g. /data) so the database
+// file survives restarts and redeploys. Falls back to a local ./data folder.
+const dataDir = process.env.DATA_DIR || join(process.cwd(), 'data')
+const databasePath = join(dataDir, 'habitat.db')
 mkdirSync(dirname(databasePath), { recursive: true })
 
 const database = new Database(databasePath)
