@@ -62,6 +62,9 @@ const requireSession = (request, response, next) => {
 
 const requireAgent = (request, response, next) => {
   if (request.user.role !== 'Agent') return response.status(403).json({ error: 'Agent access is required.' })
+  if (!request.user.name?.trim() || !request.user.phone?.trim() || !request.user.company?.trim() || !request.user.occupation?.trim()) {
+    return response.status(403).json({ error: 'Complete your agent profile, including your name, phone number, company and occupation, before using the agent workspace.' })
+  }
   next()
 }
 
@@ -191,8 +194,12 @@ app.post('/api/auth/login', (request, response) => {
   const { identifier, password, role } = request.body
   if (!['Tenant', 'Agent', 'SuperAdmin'].includes(role)) return response.status(401).json({ error: 'This account type is no longer available.' })
   const normalizedIdentifier = normalizeIdentifier(identifier)
-  const user = database.prepare('SELECT * FROM users WHERE identifier = ? AND role = ?').get(normalizedIdentifier, role)
+  const user = database.prepare('SELECT * FROM users WHERE identifier = ?').get(normalizedIdentifier)
   if (!user || user.password_hash !== hashPassword(password || '')) return response.status(401).json({ error: 'No matching account found.' })
+  if (user.role !== role) {
+    const accountRole = user.role === 'SuperAdmin' ? 'Admin' : user.role
+    return response.status(403).json({ error: `This account is registered as ${accountRole}. Select ${accountRole} to sign in.` })
+  }
   const token = crypto.randomBytes(32).toString('hex')
   sessions.set(token, user.id)
   response.json({ token, user: publicUser(user) })
@@ -203,7 +210,13 @@ app.get('/api/profile', requireSession, (request, response) => response.json(pub
 app.patch('/api/profile', requireSession, (request, response) => {
   const { name, phone, nationalId, occupation, bio, company } = request.body
   if (!name?.trim()) return response.status(400).json({ error: 'Name is required.' })
-  database.prepare('UPDATE users SET name = ?, phone = ?, national_id = ?, occupation = ?, bio = ?, company = ? WHERE id = ?').run(name.trim(), phone || '', nationalId || '', occupation || '', bio || '', company || '', request.user.id)
+  const normalizedPhone = String(phone || '').replace(/[\s()-]/g, '')
+  if (request.user.role === 'Agent') {
+    if (!/^(?:\+254|0)(?:1|7)\d{8}$/.test(normalizedPhone)) return response.status(400).json({ error: 'Enter a valid Kenyan agent phone number, such as +254712345678.' })
+    if (!company?.trim()) return response.status(400).json({ error: 'Enter your company or agency name to complete your agent profile.' })
+    if (!occupation?.trim()) return response.status(400).json({ error: 'Enter your occupation to complete your agent profile.' })
+  }
+  database.prepare('UPDATE users SET name = ?, phone = ?, national_id = ?, occupation = ?, bio = ?, company = ? WHERE id = ?').run(name.trim(), normalizedPhone, nationalId || '', occupation || '', bio || '', company || '', request.user.id)
   response.json(publicUser(database.prepare('SELECT * FROM users WHERE id = ?').get(request.user.id)))
 })
 
