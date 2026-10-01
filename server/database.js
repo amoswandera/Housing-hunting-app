@@ -113,6 +113,10 @@ const adminPassword = 'ChangeMe123!'
 const adminHash = crypto.scryptSync(adminPassword, 'habitat-local-salt', 64).toString('hex')
 database.prepare("INSERT OR IGNORE INTO users (name, identifier, password_hash, role, company, bio) VALUES (?, ?, ?, 'SuperAdmin', ?, ?)").run('Habitat Super Admin', 'superadmin@habitat.local', adminHash, 'Habitat Operations', 'System administrator')
 
+const agentPassword = 'ChangeMe123!'
+const agentHash = crypto.scryptSync(agentPassword, 'habitat-local-salt', 64).toString('hex')
+database.prepare("INSERT OR IGNORE INTO users (name, identifier, password_hash, role, phone, company, occupation, bio) VALUES (?, ?, ?, 'Agent', ?, ?, ?, ?)").run('David Kimani', 'agent@habitat.local', agentHash, '+254712345678', 'Habitat Premier Agencies', 'Senior Property Consultant', 'Licensed Nairobi property agent with 8+ years experience.')
+
 const homes = [
   ['The Willow House', 'Kitisuru, Nairobi', 'Nairobi County', 'Two bedroom', 1, 85000, 170000, 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80', 'Just listed', 'Bright, quiet and close to Karura Forest.'],
   ['Cedar & Stone', 'Kilimani, Nairobi', 'Nairobi County', 'Three bedroom', 1, 145000, 290000, 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=80', 'Popular', 'A calm, considered home with a private courtyard.'],
@@ -130,6 +134,9 @@ const seedHomes = database.transaction(() => {
   if (database.prepare('SELECT COUNT(*) AS count FROM homes').get().count === 0) {
     for (const home of homes) insertHome.run(...home)
   }
+  try {
+    database.prepare("UPDATE homes SET owner_id = (SELECT id FROM users WHERE identifier = 'agent@habitat.local') WHERE owner_id IS NULL").run()
+  } catch {}
 })
 seedHomes()
 

@@ -16,6 +16,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80',
     tag: 'Just listed',
     details: 'Bright, quiet and close to Karura Forest.',
+    agent_name: 'David Kimani',
+    agent_phone: '+254712345678',
+    agent_company: 'Habitat Premier Agencies',
   },
   {
     id: 2,
@@ -29,6 +32,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=80',
     tag: 'Popular',
     details: 'A calm, considered home with a private courtyard.',
+    agent_name: 'Grace Muthoni',
+    agent_phone: '+254722334455',
+    agent_company: 'Urban Living Properties',
   },
   {
     id: 3,
@@ -42,6 +48,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=80',
     tag: 'Best value',
     details: 'A minimal, sunny studio near the coast.',
+    agent_name: 'Hassan Omar',
+    agent_phone: '+254733445566',
+    agent_company: 'Coastline Haven Realty',
   },
   {
     id: 4,
@@ -55,6 +64,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80',
     tag: 'Furnished',
     details: 'Turn-key apartment with a leafy shared garden.',
+    agent_name: 'David Kimani',
+    agent_phone: '+254712345678',
+    agent_company: 'Habitat Premier Agencies',
   },
   {
     id: 5,
@@ -68,6 +80,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=900&q=80',
     tag: 'New today',
     details: 'Generous rooms, natural light and room to grow.',
+    agent_name: 'Grace Muthoni',
+    agent_phone: '+254722334455',
+    agent_company: 'Urban Living Properties',
   },
   {
     id: 6,
@@ -81,6 +96,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=900&q=80',
     tag: 'Quiet pick',
     details: 'A peaceful loft with a wide lake view.',
+    agent_name: 'Otieno Brian',
+    agent_phone: '+254711998877',
+    agent_company: 'Lakeside Ventures',
   },
   {
     id: 7,
@@ -94,6 +112,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=900&q=80',
     tag: 'Pet friendly',
     details: 'A leafy apartment with a generous balcony.',
+    agent_name: 'David Kimani',
+    agent_phone: '+254712345678',
+    agent_company: 'Habitat Premier Agencies',
   },
   {
     id: 8,
@@ -107,6 +128,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80',
     tag: 'Best value',
     details: 'A well-connected home for easy city living.',
+    agent_name: 'David Kimani',
+    agent_phone: '+254712345678',
+    agent_company: 'Habitat Premier Agencies',
   },
   {
     id: 9,
@@ -120,6 +144,9 @@ const initialHomes = [
     image: 'https://images.unsplash.com/photo-1600566753051-f0b89df2dd90?auto=format&fit=crop&w=900&q=80',
     tag: 'New today',
     details: 'Spacious rooms in a quiet, central neighbourhood.',
+    agent_name: 'Kiprono Koech',
+    agent_phone: '+254720112233',
+    agent_company: 'Rift Homes Limited',
   },
 ]
 
@@ -134,6 +161,28 @@ const normalizeIdentifier = (value) => {
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 const isValidPhone = (value) => /^(?:\+254|0)(?:1|7)\d{8}$/.test(value)
 const isValidIdentifier = (value) => isValidEmail(value) || isValidPhone(value)
+
+const cleanPhoneNumber = (phone) => {
+  if (!phone) return ''
+  return String(phone).replace(/[^\d+]/g, '')
+}
+
+const formatWhatsAppNumber = (phone) => {
+  if (!phone) return ''
+  const digits = String(phone).replace(/\D/g, '')
+  if (digits.startsWith('254')) return digits
+  if (digits.startsWith('0')) return `254${digits.slice(1)}`
+  return digits
+}
+
+const getWhatsAppUrl = (phone, propertyName = '') => {
+  const number = formatWhatsAppNumber(phone)
+  if (!number) return '#'
+  const text = propertyName
+    ? `Hello, I am interested in ${propertyName} listed on Habitat.`
+    : 'Hello, I am inquiring about homes listed on Habitat.'
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`
+}
 
 // Persist the signed-in user per browser tab. sessionStorage (not localStorage)
 // is used on purpose: it survives a page refresh so the user stays logged in,
@@ -169,8 +218,75 @@ function App() {
   const [paymentAmount, setPaymentAmount] = useState('')
   const [showTenantProfile, setShowTenantProfile] = useState(false)
   const [activeView, setActiveView] = useState('discover')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [agentProfileNonce, setAgentProfileNonce] = useState(0)
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
+
+  // Handle in-app and device back navigation
+  const handleBack = useCallback(() => {
+    if (selectedHome) {
+      setSelectedHome(null)
+      return true
+    }
+    if (paymentApplication) {
+      setPaymentApplication(null)
+      return true
+    }
+    if (mobileMenuOpen) {
+      setMobileMenuOpen(false)
+      return true
+    }
+    if (showTenantProfile) {
+      setShowTenantProfile(false)
+      setActiveView('discover')
+      return true
+    }
+    if (activeView !== 'discover') {
+      setActiveView('discover')
+      return true
+    }
+    return false
+  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, showTenantProfile])
+
+  // Manage browser history so hardware back buttons on Android WebView / browsers step back instead of exiting
+  useEffect(() => {
+    const handlePopState = () => {
+      handleBack()
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [handleBack])
+
+  useEffect(() => {
+    if (selectedHome || paymentApplication || showTenantProfile || activeView !== 'discover' || mobileMenuOpen) {
+      window.history.pushState({ inAppView: true }, '')
+    }
+  }, [selectedHome, paymentApplication, showTenantProfile, activeView, mobileMenuOpen])
+
+  // Capacitor native hardware back button listener
+  useEffect(() => {
+    let removeListener = null
+    const bindCapacitor = async () => {
+      try {
+        const cap = window.Capacitor
+        if (cap?.Plugins?.App) {
+          const handle = await cap.Plugins.App.addListener('backButton', () => {
+            const handled = handleBack()
+            if (!handled) {
+              cap.Plugins.App.exitApp()
+            }
+          })
+          removeListener = () => handle?.remove?.()
+        }
+      } catch {
+        // Fallback to popstate
+      }
+    }
+    bindCapacitor()
+    return () => {
+      if (removeListener) removeListener()
+    }
+  }, [handleBack])
 
   useEffect(() => {
     fetchHomes().then(setHomes).catch(() => {})
@@ -270,9 +386,9 @@ function App() {
       setAuthUser({ ...result.user, token: result.token })
       setRole(result.user.role)
       setShowAuthScreen(false)
-      return true
-    } catch {
-      return false
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error.message }
     }
   }
 
@@ -303,37 +419,75 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {mobileMenuOpen && <div className="mobile-drawer-backdrop" onClick={() => setMobileMenuOpen(false)} />}
+      <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="brand"><span className="brand-mark">h</span><span>habitat</span></div>
-        <div className="profile-card clickable" role="button" tabIndex={0} onClick={openMyProfile} onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openMyProfile()}><div className="avatar">{authUser ? authUser.initials : 'G'}</div><div><strong>{authUser ? authUser.name : 'Guest visitor'}</strong><span>{authUser ? `${authUser.role} account` : 'Browse-only access'}</span></div><span className="chevron">⌄</span></div>
+        <div className="profile-card clickable" role="button" tabIndex={0} onClick={() => { setMobileMenuOpen(false); openMyProfile() }} onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openMyProfile()}><div className="avatar">{authUser ? authUser.initials : 'G'}</div><div><strong>{authUser ? authUser.name : 'Guest visitor'}</strong><span>{authUser ? `${authUser.role} account` : 'Browse-only access'}</span></div><span className="chevron">⌄</span></div>
         <nav className="main-nav">
-          <button className={`nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false) }}><span>⌂</span> Discover</button>
-          <button className={`nav-item ${activeView === 'saved' ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false) }}><span>♡</span> Saved <b>{saved.length}</b></button>
-          <button className={`nav-item ${activeView === 'bookings' ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false) }}><span>▣</span> My bookings <b>{booked.length}</b></button>
-          {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' ? 'active' : ''}`} onClick={() => { setActiveView('profile'); setShowTenantProfile(true) }}><span>♙</span> My profile</button>}
+          <button className={`nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
+          <button className={`nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>♡</span> Saved <b>{saved.length}</b></button>
+          <button className={`nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>▣</span> My bookings <b>{booked.length}</b></button>
+          {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' || showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
         </nav>
         <div className="sidebar-bottom"><div className="help-icon">?</div><div><strong>Need a hand?</strong><span>Our team is here to help.</span></div><button aria-label="Open help">→</button></div>
       </aside>
 
       <main className="main-content">
-        <header className="topbar"><div className="mobile-brand"><span className="brand-mark">h</span> habitat</div><div className="role-badge"><span className="role-dot"></span>{authUser ? `${role} workspace` : 'Browsing as guest'}</div><div className="top-actions"><button className="icon-button" aria-label="Notifications">♧<i></i></button>{authUser ? <><div className="mini-avatar">{authUser.initials}</div><button className="logout-button" onClick={() => { setAuthUser(null); setRole('Tenant') }}>Log out</button></> : <button className="login-link" onClick={() => setShowAuthScreen(true)}>Sign in to book</button>}</div></header>
+        <header className="topbar">
+          <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen((open) => !open)} aria-label="Toggle navigation menu">
+            ☰
+          </button>
+          <div className="mobile-brand"><span className="brand-mark">h</span> habitat</div>
+          <div className="role-badge"><span className="role-dot"></span>{authUser ? `${role} workspace` : 'Browsing as guest'}</div>
+          <div className="top-actions">
+            <button className="icon-button" aria-label="Notifications">♧<i></i></button>
+            {authUser ? (
+              <>
+                <div className="mini-avatar">{authUser.initials}</div>
+                <button className="logout-button" onClick={() => { setAuthUser(null); setRole('Tenant') }}>Log out</button>
+              </>
+            ) : (
+              <button className="login-link" onClick={() => setShowAuthScreen(true)}>Sign in</button>
+            )}
+          </div>
+        </header>
 
         {role === 'Tenant' && <>
-          {showTenantProfile && <form className="listing-form profile-form tenant-profile" onSubmit={saveTenantProfile}><h2>My tenant profile</h2><p className="form-help">These details are shared with an agent when you apply for a home.</p><div className="form-grid"><label>Full name<input required value={tenantProfile.name} onChange={(event) => setTenantProfile({ ...tenantProfile, name: event.target.value })} /></label><label>Phone number<input value={tenantProfile.phone} onChange={(event) => setTenantProfile({ ...tenantProfile, phone: event.target.value })} /></label><label>National ID<input value={tenantProfile.nationalId} onChange={(event) => setTenantProfile({ ...tenantProfile, nationalId: event.target.value })} /></label><label>Occupation<input value={tenantProfile.occupation} onChange={(event) => setTenantProfile({ ...tenantProfile, occupation: event.target.value })} /></label><label className="wide-field">About you<textarea value={tenantProfile.bio} onChange={(event) => setTenantProfile({ ...tenantProfile, bio: event.target.value })} /></label></div><button className="primary-action form-submit" type="submit">Save profile <span>→</span></button></form>}
-          {activeView === 'discover' && <>
+          {showTenantProfile && (
+            <form className="listing-form profile-form tenant-profile" onSubmit={saveTenantProfile}>
+              <div className="form-header-bar">
+                <h2>My tenant profile</h2>
+                <button type="button" className="in-app-back-button" onClick={() => { setShowTenantProfile(false); setActiveView('discover') }}>
+                  ← Back to Discover
+                </button>
+              </div>
+              <p className="form-help">These details are shared with an agent when you apply for a home.</p>
+              <div className="form-grid">
+                <label>Full name<input required value={tenantProfile.name} onChange={(event) => setTenantProfile({ ...tenantProfile, name: event.target.value })} /></label>
+                <label>Phone number<input value={tenantProfile.phone} onChange={(event) => setTenantProfile({ ...tenantProfile, phone: event.target.value })} /></label>
+                <label>National ID<input value={tenantProfile.nationalId} onChange={(event) => setTenantProfile({ ...tenantProfile, nationalId: event.target.value })} /></label>
+                <label>Occupation<input value={tenantProfile.occupation} onChange={(event) => setTenantProfile({ ...tenantProfile, occupation: event.target.value })} /></label>
+                <label className="wide-field">About you<textarea value={tenantProfile.bio} onChange={(event) => setTenantProfile({ ...tenantProfile, bio: event.target.value })} /></label>
+              </div>
+              <button className="primary-action form-submit" type="submit">Save profile <span>→</span></button>
+            </form>
+          )}
+          {activeView === 'discover' && !showTenantProfile && <>
           <section className="welcome"><div><p className="eyebrow">Monday, 12 August 2024</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
           <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => setRegion(event.target.value)}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
           <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available homes, updated today</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
           <section className="home-grid">{filteredHomes.map(renderHomeCard)}</section>
           {filteredHomes.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
           </>}
-          {activeView === 'saved' && <>
+          {activeView === 'saved' && !showTenantProfile && <>
+          <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
           <div className="content-heading"><div><h2>Saved homes</h2><p>{savedHomes.length} home{savedHomes.length === 1 ? '' : 's'} you have saved</p></div></div>
           {savedHomes.length > 0 ? <section className="home-grid">{savedHomes.map(renderHomeCard)}</section> : <div className="empty-state"><strong>No saved homes yet</strong><span>Tap the heart on any home to save it here.</span></div>}
           </>}
-          {activeView === 'bookings' && <>
+          {activeView === 'bookings' && !showTenantProfile && <>
+          <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
           <div className="content-heading"><div><h2>My bookings</h2><p>Applications are reviewed by each house agent.</p></div></div>
-          {applications.length > 0 ? <section className="application-list">{applications.map((application) => <div className="application-row" key={application.id}><div><strong>{application.name}</strong><span>{application.location}</span></div><span className={`application-status ${application.status}`}>{application.status}</span>{application.status === 'approved' && <div className="contract-box"><strong>Approved</strong><span>{application.contract_pdf_url ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer">View contract PDF ↗</a> : 'Contract PDF pending'}</span><small>{application.paybill_pdf_url ? <a href={application.paybill_pdf_url} target="_blank" rel="noreferrer">View paybill PDF ↗</a> : 'Paybill PDF pending'}</small>{application.payment_status !== 'paid' && <button onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>Make payment</button>}{application.payment_status === 'pending' && <small>Payment prompt sent to {application.payment_phone}.</small>}{application.payment_status === 'paid' && <small>Deposit payment recorded.</small>}</div>}{application.status === 'submitted' && <button onClick={() => cancelBooking(application.home_id)}>Cancel application</button>}</div>)}</section> : <div className="empty-state"><strong>No bookings yet</strong><span>Apply for a home and it will appear here.</span></div>}
+          {applications.length > 0 ? <section className="application-list">{applications.map((application) => <div className="application-row" key={application.id}><div><strong>{application.name}</strong><span>{application.location}</span></div><span className={`application-status ${application.status}`}>{application.status}</span>{application.agent_phone && <div className="application-agent-contact"><div><strong>Agent: {application.agent_name || 'House Agent'}</strong><span>{application.agent_phone} {application.agent_company ? `· ${application.agent_company}` : ''}</span></div><div className="agent-contact-actions"><a href={`tel:${cleanPhoneNumber(application.agent_phone)}`} className="contact-btn call-btn mini" title="Call Agent"><span>📞</span> Call</a><a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a></div></div>}{application.status === 'approved' && <div className="contract-box"><strong>Approved</strong><span>{application.contract_pdf_url ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer">View contract PDF ↗</a> : 'Contract PDF pending'}</span><small>{application.paybill_pdf_url ? <a href={application.paybill_pdf_url} target="_blank" rel="noreferrer">View paybill PDF ↗</a> : 'Paybill PDF pending'}</small>{application.payment_status !== 'paid' && <button onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>Make payment</button>}{application.payment_status === 'pending' && <small>Payment prompt sent to {application.payment_phone}.</small>}{application.payment_status === 'paid' && <small>Deposit payment recorded.</small>}</div>}{application.status === 'submitted' && <button onClick={() => cancelBooking(application.home_id)}>Cancel application</button>}</div>)}</section> : <div className="empty-state"><strong>No bookings yet</strong><span>Apply for a home and it will appear here.</span></div>}
           </>}
         </>}
 
@@ -342,8 +496,94 @@ function App() {
         {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} />}
       </main>
 
-      {selectedHome && <div className="modal-backdrop" onClick={() => setSelectedHome(null)}><div className="booking-modal" onClick={(event) => event.stopPropagation()}><button className="close-button" onClick={() => setSelectedHome(null)}>×</button><img className="modal-home-image" src={selectedHome.image} alt={`${selectedHome.name} interior`} /><div className="modal-content"><p className="eyebrow">{selectedHome.location}</p><h2>{selectedHome.name}</h2><p>{selectedHome.details} Submit an application and the agent will review it before you make any deposit payment.</p><div className="agent-profile"><div className="avatar">{(selectedHome.agent_name || 'Agent').slice(0, 2).toUpperCase()}</div><div><strong>{selectedHome.agent_name || 'House agent'}</strong><span>{selectedHome.agent_company || 'Habitat verified agent'}</span><small>{selectedHome.agent_phone || 'Contact details shared after application review'}</small></div></div><div className="fee-row"><div><span>Monthly rent</span><strong>{formatKes(selectedHome.price)}</strong></div><div><span>Deposit after approval</span><strong>{formatKes(selectedHome.deposit)}</strong></div></div><button className="primary-action" onClick={confirmBooking}>Send application <span>→</span></button><small>No payment is taken now. The agent will send a contract and paybill after approval.</small></div></div></div>}
-      {paymentApplication && <div className="modal-backdrop" onClick={() => setPaymentApplication(null)}><form className="payment-modal" onClick={(event) => event.stopPropagation()} onSubmit={async (event) => { event.preventDefault(); try { const result = await requestPayment(paymentApplication.id, paymentPhone, paymentAmount, authUser.token); setApplications((current) => current.map((item) => item.id === paymentApplication.id ? { ...item, payment_status: 'pending', payment_phone: paymentPhone, payment_amount: paymentAmount } : item)); setPaymentApplication(null); showToast(result.message) } catch (error) { showToast(error.message) } }}><button type="button" className="close-button" onClick={() => setPaymentApplication(null)}>×</button><p className="eyebrow">Secure deposit request</p><h2>Make payment</h2><p>Enter the phone number that should receive the M-Pesa prompt and the deposit amount.</p><label>Phone number<input required value={paymentPhone} onChange={(event) => setPaymentPhone(event.target.value)} placeholder="0712345678" /></label><label>Amount (KES)<input required type="number" min="1" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label><button className="primary-action" type="submit">Pay and send prompt <span>→</span></button><small>The backend will send a prompt when Safaricom Daraja credentials are configured.</small></form></div>}
+      {role === 'Tenant' && (
+        <nav className="mobile-bottom-nav">
+          <button className={`mobile-nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
+            <span>⌂</span> Discover
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
+            <span>♡</span> Saved
+            {saved.length > 0 && <b className="mobile-nav-badge">{saved.length}</b>}
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
+            <span>▣</span> Bookings
+            {booked.length > 0 && <b className="mobile-nav-badge">{booked.length}</b>}
+          </button>
+          <button className={`mobile-nav-item ${showTenantProfile ? 'active' : ''}`} onClick={() => { if (!authUser) { setShowAuthScreen(true) } else { setShowTenantProfile(true); setActiveView('profile') } setMobileMenuOpen(false) }}>
+            <span>♙</span> {authUser ? 'Profile' : 'Sign in'}
+          </button>
+        </nav>
+      )}
+
+      {selectedHome && (
+        <div className="modal-backdrop" onClick={() => setSelectedHome(null)}>
+          <div className="booking-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-top-bar">
+              <button className="in-app-back-button" onClick={() => setSelectedHome(null)}>
+                ← Back
+              </button>
+              <button className="close-button" onClick={() => setSelectedHome(null)}>×</button>
+            </div>
+            <img className="modal-home-image" src={selectedHome.image} alt={`${selectedHome.name} interior`} />
+            <div className="modal-content">
+              <p className="eyebrow">{selectedHome.location}</p>
+              <h2>{selectedHome.name}</h2>
+              <p>{selectedHome.details} Submit an application and the agent will review it before you make any deposit payment.</p>
+              <div className="agent-profile">
+                <div className="avatar">{(selectedHome.agent_name || 'Agent').slice(0, 2).toUpperCase()}</div>
+                <div style={{ flex: 1 }}>
+                  <strong>{selectedHome.agent_name || 'House agent'}</strong>
+                  <span>{selectedHome.agent_company || 'Habitat verified agent'}</span>
+                  <small className="agent-phone-display">
+                    📞 {selectedHome.agent_phone || '+254712345678'}
+                  </small>
+                </div>
+                <div className="agent-contact-actions">
+                  <a
+                    href={`tel:${cleanPhoneNumber(selectedHome.agent_phone || '+254712345678')}`}
+                    className="contact-btn call-btn"
+                    title="Direct Phone Call"
+                  >
+                    <span>📞</span> Call
+                  </a>
+                  <a
+                    href={getWhatsAppUrl(selectedHome.agent_phone || '+254712345678', selectedHome.name)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="contact-btn whatsapp-btn"
+                    title="Chat on WhatsApp"
+                  >
+                    <span>💬</span> WhatsApp
+                  </a>
+                </div>
+              </div>
+              <div className="fee-row">
+                <div><span>Monthly rent</span><strong>{formatKes(selectedHome.price)}</strong></div>
+                <div><span>Deposit after approval</span><strong>{formatKes(selectedHome.deposit)}</strong></div>
+              </div>
+              <button className="primary-action" onClick={confirmBooking}>Send application <span>→</span></button>
+              <small>No payment is taken now. The agent will send a contract and paybill after approval.</small>
+            </div>
+          </div>
+        </div>
+      )}
+      {paymentApplication && (
+        <div className="modal-backdrop" onClick={() => setPaymentApplication(null)}>
+          <form className="payment-modal" onClick={(event) => event.stopPropagation()} onSubmit={async (event) => { event.preventDefault(); try { const result = await requestPayment(paymentApplication.id, paymentPhone, paymentAmount, authUser.token); setApplications((current) => current.map((item) => item.id === paymentApplication.id ? { ...item, payment_status: 'pending', payment_phone: paymentPhone, payment_amount: paymentAmount } : item)); setPaymentApplication(null); showToast(result.message) } catch (error) { showToast(error.message) } }}>
+            <div className="form-header-bar">
+              <button type="button" className="in-app-back-button" onClick={() => setPaymentApplication(null)}>← Back</button>
+              <button type="button" className="close-button" onClick={() => setPaymentApplication(null)}>×</button>
+            </div>
+            <p className="eyebrow">Secure deposit request</p>
+            <h2>Make payment</h2>
+            <p>Enter the phone number that should receive the M-Pesa prompt and the deposit amount.</p>
+            <label>Phone number<input required value={paymentPhone} onChange={(event) => setPaymentPhone(event.target.value)} placeholder="0712345678" /></label>
+            <label>Amount (KES)<input required type="number" min="1" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label>
+            <button className="primary-action" type="submit">Pay and send prompt <span>→</span></button>
+            <small>The backend will send a prompt when Safaricom Daraja credentials are configured.</small>
+          </form>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
@@ -401,11 +641,11 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
       }
       const initials = name.trim().split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
       try {
-        await onCreateAccount({ identifier: normalizedIdentifier, password, name: name.trim(), initials, role })
+        await onCreateAccount({ identifier: normalizedIdentifier, password, name: name.trim(), initials, role: 'Tenant' })
         setMode('login')
         setPassword('')
         setConfirmPassword('')
-        setSuccess('Account created. Sign in with your new account.')
+        setSuccess('Tenant account created successfully. Please sign in below.')
       } catch (error) {
         setError(error.message)
       }
@@ -425,12 +665,109 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
       setError('Password must be at least 8 characters long.')
       return
     }
-    if (!await onLogin({ identifier: normalizedIdentifier, password, role })) {
-      setError('No matching account found. Check your details or create an account first.')
+    const loginResult = await onLogin({ identifier: normalizedIdentifier, password, role })
+    if (!loginResult?.ok) {
+      setError(loginResult?.error || 'No matching account found. Check your details or create an account first.')
     }
   }
 
-  return <main className="auth-page"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark">h</span> habitat</div><div className="auth-copy"><p className="eyebrow">A better way home</p><h1>Find your next<br /><em>chapter.</em></h1><p>Explore thoughtfully selected homes and make your move with confidence.</p></div><div className="auth-art"><div className="auth-sun"></div><div className="auth-hill auth-hill-one"></div><div className="auth-hill auth-hill-two"></div><div className="auth-house">⌂</div></div></section><section className="auth-panel"><div className="auth-panel-inner"><p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your journey'}</p><h2>{mode === 'login' ? 'Sign in to habitat' : 'Create your account'}</h2><p className="auth-subtitle">{mode === 'login' ? 'Sign in to save homes and book a property.' : 'Create a tenant account to book a home. Agents and admins are added by the Habitat team.'}</p><form onSubmit={submitForm}>{mode === 'register' && <label>Full name<input type="text" value={name} onChange={(event) => { setName(event.target.value); setError('') }} placeholder="Your full name" /></label>}<label>Email address<input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com" /></label><label>Password<div className="password-field"><input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />{mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}</div></label>{mode === 'register' && <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} placeholder="Repeat your password" /></label>}{mode === 'login' && <fieldset><legend>Sign in as</legend><div className="auth-role-options">{[['Tenant', 'Tenant'], ['Agent', 'Agent'], ['SuperAdmin', 'Admin']].map(([value, label]) => <button type="button" key={value} className={role === value ? 'active' : ''} onClick={() => setRole(value)}><span>{value === 'Tenant' ? '⌂' : value === 'Agent' ? '▣' : '◆'}</span>{label}</button>)}</div></fieldset>}{error && <p className="auth-error">{error}</p>}{success && <p className="auth-success">{success}</p>}<button className="auth-submit" type="submit">{mode === 'login' ? `Continue to ${role.toLowerCase()} dashboard` : 'Create account'} <span>→</span></button></form><button className="auth-mode-toggle" onClick={() => { const next = mode === 'login' ? 'register' : 'login'; if (next === 'register') setRole('Tenant'); setMode(next); setError(''); setSuccess('') }}>{mode === 'login' ? 'New to habitat? Create an account' : 'Already have an account? Sign in'}</button>{onBrowseHomes && <button className="guest-browse-button" onClick={onBrowseHomes}>Continue browsing homes as a guest</button>}<p className="auth-note">You can browse homes without an account. Sign in is required to book.</p></div></section></main>
+  return (
+    <main className="auth-page">
+      <section className="auth-visual">
+        <div className="auth-brand"><span className="brand-mark">h</span> habitat</div>
+        <div className="auth-copy">
+          <p className="eyebrow">A better way home</p>
+          <h1>Find your next<br /><em>chapter.</em></h1>
+          <p>Explore thoughtfully selected homes and make your move with confidence.</p>
+        </div>
+        <div className="auth-art">
+          <div className="auth-sun"></div>
+          <div className="auth-hill auth-hill-one"></div>
+          <div className="auth-hill auth-hill-two"></div>
+          <div className="auth-house">⌂</div>
+        </div>
+      </section>
+
+      <section className="auth-panel">
+        <div className="auth-panel-inner">
+          {onBrowseHomes && (
+            <div className="auth-nav-bar">
+              <button type="button" className="in-app-back-button" onClick={onBrowseHomes}>
+                ← Back to homes
+              </button>
+            </div>
+          )}
+          <p className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Start your journey'}</p>
+          <h2>{mode === 'login' ? 'Sign in to habitat' : 'Create tenant account'}</h2>
+          <p className="auth-subtitle">
+            {mode === 'login'
+              ? 'Sign in to save homes, manage bookings, and contact agents.'
+              : 'Create a tenant account to book homes. Agent and Admin accounts are provisioned by Habitat operations.'}
+          </p>
+
+          {mode === 'register' && (
+            <div className="role-restriction-notice">
+              <strong>Notice:</strong> Only tenant accounts can self-register. Agents and administrators cannot create accounts here—they are provisioned by an admin and should use the <em>Sign in</em> option.
+            </div>
+          )}
+
+          <form onSubmit={submitForm}>
+            {mode === 'register' && (
+              <label>
+                Full name
+                <input type="text" value={name} onChange={(event) => { setName(event.target.value); setError('') }} placeholder="Your full name" />
+              </label>
+            )}
+            <label>
+              Email address or phone
+              <input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com or 0712345678" />
+            </label>
+            <label>
+              Password
+              <div className="password-field">
+                <input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />
+                {mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}
+              </div>
+            </label>
+            {mode === 'register' && (
+              <label>
+                Confirm password
+                <input type="password" value={confirmPassword} onChange={(event) => { setConfirmPassword(event.target.value); setError('') }} placeholder="Repeat your password" />
+              </label>
+            )}
+
+            {mode === 'login' && (
+              <fieldset>
+                <legend>Sign in as</legend>
+                <div className="auth-role-options">
+                  {[['Tenant', 'Tenant'], ['Agent', 'Agent'], ['SuperAdmin', 'Admin']].map(([value, label]) => (
+                    <button type="button" key={value} className={role === value ? 'active' : ''} onClick={() => setRole(value)}>
+                      <span>{value === 'Tenant' ? '⌂' : value === 'Agent' ? '▣' : '◆'}</span>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {error && <p className="auth-error">{error}</p>}
+            {success && <p className="auth-success">{success}</p>}
+
+            <button className="auth-submit" type="submit">
+              {mode === 'login' ? `Continue to ${role === 'SuperAdmin' ? 'admin' : role.toLowerCase()} dashboard` : 'Create tenant account'} <span>→</span>
+            </button>
+          </form>
+
+          <button className="auth-mode-toggle" onClick={() => { const next = mode === 'login' ? 'register' : 'login'; setRole('Tenant'); setMode(next); setError(''); setSuccess('') }}>
+            {mode === 'login' ? 'New to habitat? Create a tenant account' : 'Already have an account? Sign in'}
+          </button>
+
+          {onBrowseHomes && <button className="guest-browse-button" onClick={onBrowseHomes}>Continue browsing homes as a guest</button>}
+          <p className="auth-note">You can browse homes without an account. Sign in is required to book.</p>
+        </div>
+      </section>
+    </main>
+  )
 }
 
 function SuperAdminPanel({ token, currentUserId, onNotify }) {

@@ -1,0 +1,9 @@
+{
+  "appId": "com.habitat.househunting",
+  "appName": "Habitat",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}
