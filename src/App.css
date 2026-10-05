@@ -485,7 +485,20 @@ button { cursor: pointer; }
 }
 
 /* Super-admin panel */
-.admin-user-search { margin: 4px 0 18px; max-width: 420px; }
+.admin-user-search { margin: 0; max-width: none; flex: 1; min-width: 200px; }
+.users-toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.users-toolbar .search-field { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; height: 38px; }
+.role-filter { padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; color: #29433a; font-size: 11px; min-width: 160px; height: 38px; }
+.users-table-wrap { overflow-x: auto; }
+.users-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.users-table th { text-align: left; color: #819087; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid #eef1ee; }
+.users-table td { padding: 12px; border-bottom: 1px solid #eef1ee; color: #476055; vertical-align: middle; }
+.users-table tbody tr { cursor: pointer; }
+.users-table tbody tr:hover { background: #f6f9f5; }
+.users-table-name { display: flex; align-items: center; gap: 10px; }
+.users-table-name .avatar { width: 30px; height: 30px; font-size: 10px; flex-shrink: 0; }
+.users-table-name strong { color: #2d443b; font-size: 11px; }
+.users-table td:last-child { text-align: right; white-space: nowrap; }
 .user-row select { padding: 8px 10px; border-radius: 10px; border: 1px solid #d9d9de; background: #fff; font: inherit; }
 .user-row .remove-user:disabled { opacity: .45; cursor: not-allowed; }
 .user-row strong em { font-style: normal; font-weight: 500; color: #6b6b73; font-size: .85em; }

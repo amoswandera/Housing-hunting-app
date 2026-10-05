@@ -1,19 +1,83 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, reviewApplication, updateHomeAvailability, updateProfile, createHome, uploadHouseImage, uploadPdf } from './api'
+import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf } from './supabaseApi'
+import { downloadContractPDF } from './generateContract'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
 
-function AgentDashboard({ token, onNotify, openProfileNonce }) {
+const cleanPhoneNumber = (phone) => {
+  if (!phone) return ''
+  return String(phone).replace(/[^\d+]/g, '')
+}
+
+const formatWhatsAppNumber = (phone) => {
+  if (!phone) return ''
+  const digits = String(phone).replace(/\D/g, '')
+  if (digits.startsWith('254')) return digits
+  if (digits.startsWith('0')) return `254${digits.slice(1)}`
+  return digits
+}
+
+const getWhatsAppUrl = (phone, propertyName = '') => {
+  const number = formatWhatsAppNumber(phone)
+  if (!number) return '#'
+  const text = propertyName
+    ? `Hello, I am interested in ${propertyName} listed on Habitat.`
+    : 'Hello, I am inquiring about an application on Habitat.'
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`
+}
+
+function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [homes, setHomes] = useState([])
   const [applications, setApplications] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [showTenantProfile, setShowTenantProfile] = useState(false)
+  const [selectedTenant, setSelectedTenant] = useState(null)
+  const [tenantProfile, setTenantProfile] = useState(null)
   const [profileNudge, setProfileNudge] = useState(false)
   const [profile, setProfile] = useState({ name: '', phone: '', occupation: '', bio: '', company: '' })
-  const [form, setForm] = useState({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '' })
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [form, setForm] = useState({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '', customRegion: '' })
   const [imageFile, setImageFile] = useState(null)
   const [contractFiles, setContractFiles] = useState({})
   const [paybillFiles, setPaybillFiles] = useState({})
+  const [homeSearch, setHomeSearch] = useState('')
+  const [homeRegionFilter, setHomeRegionFilter] = useState('All regions')
+  const [homeCategoryFilter, setHomeCategoryFilter] = useState('All categories')
+  const [applicationSearch, setApplicationSearch] = useState('')
+  const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
+  const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
+  const [selectedHome, setSelectedHome] = useState(null)
+  const [internalView, setInternalView] = useState(view) // 'homes' or 'applications'
+  const [showContractForm, setShowContractForm] = useState(false)
+  const [contractForm, setContractForm] = useState({
+    tenantName: '',
+    tenantId: '',
+    tenantPhone: '',
+    tenantEmail: '',
+    tenantAddress: '',
+    startDate: '',
+    endDate: '',
+    months: 12,
+    paybill: '',
+    bankAccount: '',
+    utilities: {
+      electricity: true,
+      water: true,
+      gas: false,
+      internet: false,
+      waste: true
+    },
+    petsAllowed: false,
+    petsDetails: '',
+    parkingIncluded: true,
+    parkingDetails: ''
+  })
+
+  useEffect(() => {
+    setInternalView(view)
+  }, [view])
 
   const loadData = useCallback(async () => {
     try {
@@ -54,8 +118,13 @@ function AgentDashboard({ token, onNotify, openProfileNonce }) {
       let imageUrl = form.image
       if (imageFile) imageUrl = (await uploadHouseImage(imageFile, token)).url
       if (!imageUrl) throw new Error('Add an image URL or choose a house image file.')
-      await createHome({ ...form, image: imageUrl }, token)
-      setForm({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '' })
+      
+      // Use custom region if "Other" is selected
+      const region = form.region === 'Other' ? form.customRegion : form.region
+      if (!region) throw new Error('Please enter a region name.')
+      
+      await createHome({ ...form, region, image: imageUrl }, token)
+      setForm({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '', customRegion: '' })
       setImageFile(null)
       setShowForm(false)
       await loadData()
@@ -66,6 +135,21 @@ function AgentDashboard({ token, onNotify, openProfileNonce }) {
   const saveProfile = async (event) => {
     event.preventDefault()
     try {
+      // Update password if provided
+      if (password) {
+        if (password.length < 8) {
+          onNotify('Password must be at least 8 characters long.')
+          return
+        }
+        if (password !== confirmPassword) {
+          onNotify('Passwords do not match.')
+          return
+        }
+        await updatePassword(password, token)
+        setPassword('')
+        setConfirmPassword('')
+      }
+
       const updated = await updateProfile(profile, token)
       setProfile(updated)
       setShowProfile(false)
@@ -85,14 +169,74 @@ function AgentDashboard({ token, onNotify, openProfileNonce }) {
       let contractPdfUrl = ''
       let paybillPdfUrl = ''
       if (approved) {
-        if (!contractFiles[application.id] || !paybillFiles[application.id]) throw new Error('Choose both the contract PDF and paybill PDF before approving.')
-        contractPdfUrl = (await uploadPdf(contractFiles[application.id], token)).url
-        paybillPdfUrl = (await uploadPdf(paybillFiles[application.id], token)).url
+        // Allow approval without PDFs - agent can generate contract later
+        if (contractFiles[application.id] && paybillFiles[application.id]) {
+          contractPdfUrl = (await uploadPdf(contractFiles[application.id], token)).url
+          paybillPdfUrl = (await uploadPdf(paybillFiles[application.id], token)).url
+        }
       }
       await reviewApplication(application.id, { status, contractText: '', paybill: '', contractPdfUrl, paybillPdfUrl }, token)
       await loadData()
       onNotify(`Application ${status}.`)
     } catch (error) { onNotify(error.message) }
+  }
+
+  const viewTenantProfile = async (tenantId) => {
+    try {
+      const profile = await fetchTenantProfile(tenantId, token)
+      setTenantProfile(profile)
+      setSelectedTenant(tenantId)
+      setShowTenantProfile(true)
+    } catch (error) {
+      onNotify(error.message)
+    }
+  }
+
+  const generateContract = (application, home) => {
+    const contractData = {
+      agentName: profile.name,
+      agentAddress: profile.company || 'N/A',
+      agentPhone: profile.phone || 'N/A',
+      agentEmail: profile.identifier || 'N/A',
+      tenantName: application.tenant_name || 'N/A',
+      tenantId: application.tenant_national_id || 'N/A',
+      tenantPhone: application.tenant_phone || 'N/A',
+      tenantEmail: application.tenant_email || 'N/A',
+      tenantAddress: 'N/A',
+      propertyName: home.name,
+      propertyAddress: home.location,
+      propertyType: home.type,
+      bedrooms: parseInt(home.type) || 1,
+      parking: home.parking,
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      months: 12,
+      rent: home.price,
+      deposit: home.deposit,
+      paybill: contractForm.paybill || 'N/A',
+      bankAccount: contractForm.bankAccount || 'N/A',
+      utilities: contractForm.utilities,
+      petsAllowed: contractForm.petsAllowed,
+      petsDetails: contractForm.petsDetails,
+      parkingIncluded: contractForm.parkingIncluded,
+      parkingDetails: contractForm.parkingDetails
+    }
+    downloadContractPDF(contractData, `${home.name.replace(/\s+/g, '_')}_contract.pdf`)
+    onNotify('Contract PDF downloaded successfully.')
+  }
+
+  const openContractForm = (application, home) => {
+    setContractForm({
+      ...contractForm,
+      tenantName: application.tenant_name || '',
+      tenantId: application.tenant_national_id || '',
+      tenantPhone: application.tenant_phone || '',
+      tenantEmail: application.tenant_email || '',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    })
+    setSelectedHome(home)
+    setShowContractForm(true)
   }
 
   const pendingApplication = applications.find((application) => application.status === 'submitted')
@@ -110,7 +254,632 @@ function AgentDashboard({ token, onNotify, openProfileNonce }) {
     return () => wrapper.remove()
   }, [pendingApplication])
 
-  return <section className="management"><div className="management-header"><div><p className="eyebrow">Your listings</p><h1>Agent workspace</h1><p>Publish vacant homes, maintain your profile and review tenant applications.</p></div><div className="management-actions"><button onClick={() => setShowForm((current) => !current)}>+ Add a new home <span>→</span></button><button onClick={() => setShowProfile((current) => !current)}>My agent profile <span>→</span></button></div></div>{showProfile && <form className="listing-form profile-form" onSubmit={saveProfile}><div className="form-header-bar"><h2>Agent profile</h2>{!profileNudge && <button type="button" className="in-app-back-button" onClick={() => setShowProfile(false)}>← Back to dashboard</button>}</div>{profileNudge && <p className="profile-nudge" style={{ background: '#fdf6ed', color: '#9c5b1c', padding: '12px 14px', borderRadius: '6px', borderLeft: '4px solid #e08b2d', marginBottom: '14px', fontSize: '11px', lineHeight: '1.5' }}><strong>Welcome to Habitat!</strong> Please complete your agent profile (including a valid Kenyan phone number, company/agency, and occupation) before publishing or managing homes.</p>}<p className="form-help">These details are shown to tenants viewing your homes.</p><div className="form-grid"><label>Full name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label><label>Phone number<input required placeholder="+254712345678" value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label><label>Company or agency<input required placeholder="e.g. Habitat Premier Agencies" value={profile.company} onChange={(event) => setProfile({ ...profile, company: event.target.value })} /></label><label>Occupation<input required placeholder="e.g. Licensed Property Manager" value={profile.occupation} onChange={(event) => setProfile({ ...profile, occupation: event.target.value })} /></label><label className="wide-field">About you<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label></div><button className="primary-action form-submit" type="submit">Save profile <span>→</span></button></form>}{showForm && <form className="listing-form" onSubmit={submitHome}><div className="form-header-bar"><h2>Publish vacant home</h2><button type="button" className="in-app-back-button" onClick={() => setShowForm(false)}>← Back to listings</button></div><div className="form-grid"><label>Home name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Estate and town<input required placeholder="Kilimani, Nairobi" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></label><label>County<select value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></label><label>Category<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></label><label>Monthly rent (KES)<input required type="number" min="1" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label><label>Deposit (KES)<input required type="number" min="1" value={form.deposit} onChange={(event) => setForm({ ...form, deposit: event.target.value })} /></label><label>Photo URL<input type="url" placeholder="https://..." value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} /></label><label>Upload house image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(event) => setImageFile(event.target.files?.[0] || null)} /></label><label>Short description<input value={form.details} onChange={(event) => setForm({ ...form, details: event.target.value })} /></label></div><p className="form-help">Choose a local image or provide an image URL. Maximum upload size: 8MB.</p><label className="check-label"><input type="checkbox" checked={form.parking} onChange={(event) => setForm({ ...form, parking: event.target.checked })} /> Parking available</label><button className="primary-action form-submit" type="submit">Publish listing <span>→</span></button></form>}{applications.length > 0 && <div className="table-panel application-panel"><div className="table-title"><h2>Tenant applications</h2><span>{applications.filter((item) => item.status === 'submitted').length} awaiting review</span></div>{applications.map((application) => <div className="agent-application" key={application.id}><div><strong>{application.tenant_name}</strong><span>{application.tenant_identifier} · {application.tenant_phone || 'No phone provided'}</span><small>{application.tenant_occupation || 'Occupation not provided'} · ID: {application.tenant_national_id || 'Not provided'}</small></div><div><strong>{application.name}</strong><span>{application.location}</span></div><span className={`application-status ${application.status}`}>{application.status}</span>{application.status === 'submitted' && <div className="review-actions"><button onClick={() => review(application, 'approved')}>Approve</button><button onClick={() => review(application, 'declined')}>Decline</button></div>}</div>)}</div>}<div className="stat-grid"><div><span>Your homes</span><strong>{homes.length}</strong><small>Managed in the database</small></div><div><span>Available homes</span><strong>{homes.filter((home) => home.available).length}</strong><small>Visible to tenants</small></div><div><span>Applications</span><strong>{applications.length}</strong><small>Tenant interest</small></div></div><div className="table-panel"><div className="table-title"><h2>Your current listings</h2><button onClick={() => loadData()}>Refresh ↻</button></div>{homes.map((home) => <div className="listing-row" key={home.id}><img src={home.image} alt="" /><div><strong>{home.name}</strong><span>{home.location} · {home.type}</span></div><span className={`availability ${home.available ? '' : 'pending'}`}>{home.available ? 'Available' : 'Taken'}</span><strong>{formatKes(home.price)} <small>/ mo</small></strong><button className="availability-button" onClick={() => toggleAvailability(home)}>{home.available ? 'Mark taken' : 'Make available'}</button></div>)}</div></section>
+  return (
+    <section className="management">
+      <div className="management-header">
+        <div>
+          <p className="eyebrow">Your listings</p>
+          <h1>Agent workspace</h1>
+          <p>Publish vacant homes, maintain your profile and review tenant applications.</p>
+        </div>
+        <div className="management-actions">
+          <button onClick={() => setShowForm((current) => !current)}>+ Add a new home <span>→</span></button>
+          <button onClick={() => setShowProfile((current) => !current)}>My agent profile <span>→</span></button>
+        </div>
+      </div>
+
+      {/* Internal navigation for switching views */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <button 
+          onClick={() => { setInternalView('homes'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
+          style={{ 
+            padding: '10px 20px', borderRadius: '8px', border: internalView === 'homes' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
+            ':hover': { background: '#f9fafb' }
+          }}
+        >
+          🏠 Homes
+        </button>
+        <button 
+          onClick={() => { setInternalView('applications'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
+          style={{ 
+            padding: '10px 20px', borderRadius: '8px', border: internalView === 'applications' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
+            ':hover': { background: '#f9fafb' }
+          }}
+        >
+          📋 Applications
+        </button>
+      </div>
+
+      {showProfile && (
+        <form className="listing-form profile-form" onSubmit={saveProfile}>
+          <div className="form-header-bar">
+            <h2>Agent profile</h2>
+            {!profileNudge && <button type="button" className="in-app-back-button" onClick={() => setShowProfile(false)}>← Back to dashboard</button>}
+          </div>
+          {profileNudge && (
+            <p className="profile-nudge" style={{ background: '#fdf6ed', color: '#9c5b1c', padding: '12px 14px', borderRadius: '6px', borderLeft: '4px solid #e08b2d', marginBottom: '14px', fontSize: '11px', lineHeight: '1.5' }}>
+              <strong>Welcome to Habitat!</strong> Please complete your agent profile (including a valid Kenyan phone number, company/agency, and occupation) before publishing or managing homes.
+            </p>
+          )}
+          <p className="form-help">These details are shown to tenants viewing your homes.</p>
+          <div className="form-grid">
+            <label>Full name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label>
+            <label>Phone number<input required placeholder="+254712345678" value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+            <label>Company or agency<input required placeholder="e.g. Habitat Premier Agencies" value={profile.company} onChange={(event) => setProfile({ ...profile, company: event.target.value })} /></label>
+            <label>Occupation<input required placeholder="e.g. Licensed Property Manager" value={profile.occupation} onChange={(event) => setProfile({ ...profile, occupation: event.target.value })} /></label>
+            <label className="wide-field">About you<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
+          </div>
+          <div style={{ marginTop: '20px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+            <p style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '500' }}>Change password (optional)</p>
+            <label>New password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Leave blank to keep current password" /></label>
+            <label>Confirm new password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Re-enter new password" /></label>
+          </div>
+          <button className="primary-action form-submit" type="submit">Save profile <span>→</span></button>
+        </form>
+      )}
+
+      {showTenantProfile && tenantProfile && (
+        <div className="listing-form profile-form" style={{ padding: '24px' }}>
+          <div className="form-header-bar">
+            <h2>Tenant Profile</h2>
+            <button type="button" className="in-app-back-button" onClick={() => { setShowTenantProfile(false); setTenantProfile(null); setSelectedTenant(null) }}>← Back to dashboard</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
+            <div className="avatar" style={{ width: '80px', height: '80px', fontSize: '32px' }}>{tenantProfile.initials}</div>
+            <div>
+              <h3 style={{ margin: '0 0 4px 0' }}>{tenantProfile.name}</h3>
+              <p style={{ margin: '0', color: '#666' }}>{tenantProfile.role} · Joined {new Date(tenantProfile.created_at).toLocaleDateString()}</p>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>Email/Phone<input disabled value={tenantProfile.identifier} /></label>
+            <label>Phone number<input disabled value={tenantProfile.phone || 'Not provided'} /></label>
+            <label>National ID<input disabled value={tenantProfile.national_id || 'Not provided'} /></label>
+            <label>Occupation<input disabled value={tenantProfile.occupation || 'Not provided'} /></label>
+            <label className="wide-field">About<textarea disabled value={tenantProfile.bio || 'No bio provided'} style={{ minHeight: '100px' }} /></label>
+          </div>
+          {tenantProfile.phone && (
+            <div className="agent-contact-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+              <a href={`tel:${cleanPhoneNumber(tenantProfile.phone)}`} className="contact-btn call-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '6px' }}>
+                <span>📞</span> Call Tenant
+              </a>
+              <a href={getWhatsAppUrl(tenantProfile.phone)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '6px' }}>
+                <span>💬</span> WhatsApp
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showForm && (
+        <form className="listing-form" onSubmit={submitHome}>
+          <div className="form-header-bar">
+            <h2>Add a new home</h2>
+            <button type="button" className="in-app-back-button" onClick={() => setShowForm(false)}>← Back to dashboard</button>
+          </div>
+          <p className="form-help">Add details for a new vacant home to your listings.</p>
+          <div className="form-grid">
+            <label>Home name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. The Willow House" /></label>
+            <label>Location<input required value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="e.g. Kitisuru, Nairobi" /></label>
+            <label>Region<select required value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}>
+              <option value="Nairobi County">Nairobi County</option>
+              <option value="Mombasa County">Mombasa County</option>
+              <option value="Kisumu County">Kisumu County</option>
+              <option value="Nakuru County">Nakuru County</option>
+              <option value="Kiambu County">Kiambu County</option>
+              <option value="Machakos County">Machakos County</option>
+              <option value="Kajiado County">Kajiado County</option>
+              <option value="Other">Other (specify below)</option>
+            </select></label>
+            {form.region === 'Other' && <label>Custom region<input required value={form.customRegion || ''} onChange={(event) => setForm({ ...form, customRegion: event.target.value })} placeholder="Enter region name" /></label>}
+            <label>Home type<select required value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>
+              <option value="Single room">Single room</option>
+              <option value="Bedsitter">Bedsitter</option>
+              <option value="One bedroom">One bedroom</option>
+              <option value="Two bedroom">Two bedroom</option>
+              <option value="Three bedroom">Three bedroom</option>
+              <option value="Four bedroom">Four bedroom</option>
+            </select></label>
+            <label>Monthly rent (KES)<input required type="number" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="85000" /></label>
+            <label>Deposit (KES)<input required type="number" value={form.deposit} onChange={(event) => setForm({ ...form, deposit: event.target.value })} placeholder="170000" /></label>
+            <label>Image URL<input value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} placeholder="https://example.com/image.jpg" /></label>
+            <label>Or upload image<input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0])} /></label>
+            <label>Tag<input value={form.tag} onChange={(event) => setForm({ ...form, tag: event.target.value })} placeholder="e.g. Just listed" /></label>
+            <label className="wide-field">Details<textarea value={form.details} onChange={(event) => setForm({ ...form, details: event.target.value })} placeholder="Describe the home..." /></label>
+            <label><input type="checkbox" checked={form.parking} onChange={(event) => setForm({ ...form, parking: event.target.checked })} /> Parking available</label>
+          </div>
+          <button className="primary-action form-submit" type="submit">Publish home <span>→</span></button>
+        </form>
+      )}
+
+      {internalView === 'homes' && !showForm && !showProfile && (
+        <div className="table-panel">
+          <div className="table-title">
+            <h2>Your current listings</h2>
+            <span>{homes.length} home{homes.length === 1 ? '' : 's'}</span>
+            <button onClick={loadData}>Refresh ↻</button>
+          </div>
+          <div className="users-toolbar">
+            <div className="search-field admin-user-search">
+              <span>⌕</span>
+              <input
+                value={homeSearch}
+                onChange={(event) => setHomeSearch(event.target.value)}
+                placeholder="Search by neighbourhood or home"
+              />
+            </div>
+            <select
+              className="role-filter"
+              value={homeRegionFilter}
+              onChange={(event) => setHomeRegionFilter(event.target.value)}
+              aria-label="Filter homes by region"
+            >
+              <option value="All regions">All regions</option>
+              <option value="Nairobi County">Nairobi County</option>
+              <option value="Mombasa County">Mombasa County</option>
+              <option value="Kisumu County">Kisumu County</option>
+              <option value="Nakuru County">Nakuru County</option>
+              <option value="Kiambu County">Kiambu County</option>
+            </select>
+            <select
+              className="role-filter"
+              value={homeCategoryFilter}
+              onChange={(event) => setHomeCategoryFilter(event.target.value)}
+              aria-label="Filter homes by category"
+            >
+              <option value="All categories">All categories</option>
+              <option value="Studio">Studio</option>
+              <option value="One bedroom">One bedroom</option>
+              <option value="Two bedroom">Two bedroom</option>
+              <option value="Three bedroom">Three bedroom</option>
+              <option value="Four bedroom">Four bedroom</option>
+            </select>
+          </div>
+          {homes.length === 0 ? (
+            <div className="empty-state"><strong>No homes listed yet</strong><span>Add your first home to get started.</span></div>
+          ) : (
+            <div className="users-table-wrap">
+              <table className="users-table homes-table">
+                <thead>
+                  <tr>
+                    <th>Home</th>
+                    <th>Location</th>
+                    <th>Region</th>
+                    <th>Category</th>
+                    <th>Rent</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {homes.filter(home => {
+                    const search = homeSearch.toLowerCase()
+                    const matchesSearch = !search ||
+                      home.name.toLowerCase().includes(search) ||
+                      home.location.toLowerCase().includes(search) ||
+                      home.type.toLowerCase().includes(search) ||
+                      home.region.toLowerCase().includes(search)
+                    const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+                    const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+                    return matchesSearch && matchesRegion && matchesCategory
+                  }).map((home) => (
+                    <tr key={home.id}>
+                      <td>
+                        <div className="users-table-name">
+                          <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          <strong>{home.name}</strong>
+                        </div>
+                      </td>
+                      <td>{home.location}</td>
+                      <td>{home.region}</td>
+                      <td>{home.type}</td>
+                      <td>{formatKes(home.price)}/mo</td>
+                      <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: home.available ? '#10b981' : '#ef4444', color: 'white' }}>{home.available ? 'Available' : 'Taken'}</span></td>
+                      <td>
+                        <button 
+                          onClick={() => toggleAvailability(home)}
+                          style={{ padding: '6px 12px', fontSize: '12px', background: home.available ? '#ef4444' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                          {home.available ? 'Mark taken' : 'Mark available'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {homes.filter(home => {
+                const search = homeSearch.toLowerCase()
+                const matchesSearch = !search ||
+                  home.name.toLowerCase().includes(search) ||
+                  home.location.toLowerCase().includes(search) ||
+                  home.type.toLowerCase().includes(search) ||
+                  home.region.toLowerCase().includes(search)
+                const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+                const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+                return matchesSearch && matchesRegion && matchesCategory
+              }).length === 0 && (
+                <div className="empty-state"><strong>No homes found</strong><span>Try a different search, region, or category.</span></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {internalView === 'applications' && !showForm && !showProfile && (
+        <div className="table-panel">
+          <div className="table-title">
+            <h2>Applications</h2>
+            <span>{applications.length} application{applications.length === 1 ? '' : 's'}</span>
+            <button onClick={loadData}>Refresh ↻</button>
+          </div>
+          <div className="users-toolbar">
+            <div className="search-field admin-user-search">
+              <span>⌕</span>
+              <input
+                value={applicationSearch}
+                onChange={(event) => setApplicationSearch(event.target.value)}
+                placeholder="Search by tenant name or home"
+              />
+            </div>
+            <select
+              className="role-filter"
+              value={applicationRegionFilter}
+              onChange={(event) => setApplicationRegionFilter(event.target.value)}
+              aria-label="Filter applications by region"
+            >
+              <option value="All regions">All regions</option>
+              <option value="Nairobi County">Nairobi County</option>
+              <option value="Mombasa County">Mombasa County</option>
+              <option value="Kisumu County">Kisumu County</option>
+              <option value="Nakuru County">Nakuru County</option>
+              <option value="Kiambu County">Kiambu County</option>
+            </select>
+            <select
+              className="role-filter"
+              value={applicationCategoryFilter}
+              onChange={(event) => setApplicationCategoryFilter(event.target.value)}
+              aria-label="Filter applications by category"
+            >
+              <option value="All categories">All categories</option>
+              <option value="Studio">Studio</option>
+              <option value="One bedroom">One bedroom</option>
+              <option value="Two bedroom">Two bedroom</option>
+              <option value="Three bedroom">Three bedroom</option>
+              <option value="Four bedroom">Four bedroom</option>
+            </select>
+          </div>
+          {applications.length === 0 ? (
+            <div className="empty-state"><strong>No applications yet</strong><span>Applications from tenants will appear here.</span></div>
+          ) : (
+            <div className="users-table-wrap">
+              <table className="users-table applications-table">
+                <thead>
+                  <tr>
+                    <th>Tenant</th>
+                    <th>Home</th>
+                    <th>Location</th>
+                    <th>Region</th>
+                    <th>Category</th>
+                    <th>Deposit</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {applications.filter(app => {
+                    const search = applicationSearch.toLowerCase()
+                    const matchesSearch = !search ||
+                      (app.tenant_name || '').toLowerCase().includes(search) ||
+                      (app.name || '').toLowerCase().includes(search) ||
+                      (app.location || '').toLowerCase().includes(search)
+                    const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
+                    const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
+                    return matchesSearch && matchesRegion && matchesCategory
+                  }).map((application) => (
+                    <tr key={application.id}>
+                      <td>
+                        <div className="users-table-name">
+                          <div className="avatar">{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                          <strong>{application.tenant_name || 'Tenant'}</strong>
+                        </div>
+                      </td>
+                      <td>{application.name || '—'}</td>
+                      <td>{application.location || '—'}</td>
+                      <td>{application.region || '—'}</td>
+                      <td>{application.type || '—'}</td>
+                      <td>{formatKes(application.deposit)}</td>
+                      <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white' }}>{application.status}</span></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button onClick={() => viewTenantProfile(application.tenant_id)} style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View</button>
+                          {application.tenant_phone && (
+                            <>
+                              <a href={`tel:${cleanPhoneNumber(application.tenant_phone)}`} style={{ padding: '6px 12px', fontSize: '12px', background: '#25D366', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', textDecoration: 'none' }}>Call</a>
+                              <a href={getWhatsAppUrl(application.tenant_phone, application.name)} target="_blank" rel="noopener noreferrer" style={{ padding: '6px 12px', fontSize: '12px', background: '#25D366', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', textDecoration: 'none' }}>WhatsApp</a>
+                            </>
+                          )}
+                          {application.status === 'submitted' && (
+                            <>
+                              <button onClick={() => review(application, 'approved')} style={{ padding: '6px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Approve</button>
+                              <button onClick={() => review(application, 'declined')} style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Decline</button>
+                              <button onClick={() => generateContract(application, homes.find(h => h.id === application.home_id))} style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Contract</button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {applications.filter(app => {
+                const search = applicationSearch.toLowerCase()
+                const matchesSearch = !search ||
+                  (app.tenant_name || '').toLowerCase().includes(search) ||
+                  (app.name || '').toLowerCase().includes(search) ||
+                  (app.location || '').toLowerCase().includes(search)
+                const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
+                const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
+                return matchesSearch && matchesRegion && matchesCategory
+              }).length === 0 && (
+                <div className="empty-state"><strong>No applications found</strong><span>Try a different search, region, or category.</span></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Home Details Modal */}
+      {selectedHome && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => setSelectedHome(null)}>
+          <div style={{ 
+            background: 'white', borderRadius: '12px', maxWidth: '600px', width: '90%',
+            maxHeight: '80vh', overflowY: 'auto'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ height: '250px', backgroundImage: `url(${selectedHome.image})`, backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: '12px 12px 0 0' }}></div>
+            <div style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                <div>
+                  <h2 style={{ margin: '0 0 8px 0' }}>{selectedHome.name}</h2>
+                  <p style={{ margin: '0', color: '#666' }}>{selectedHome.location}</p>
+                </div>
+                <button onClick={() => setSelectedHome(null)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
+                <div><strong>Type:</strong> {selectedHome.type}</div>
+                <div><strong>Region:</strong> {selectedHome.region}</div>
+                <div><strong>Monthly rent:</strong> {formatKes(selectedHome.price)}</div>
+                <div><strong>Deposit:</strong> {formatKes(selectedHome.deposit)}</div>
+                <div><strong>Parking:</strong> {selectedHome.parking ? 'Available' : 'Not available'}</div>
+                <div><strong>Status:</strong> {selectedHome.available ? 'Available' : 'Taken'}</div>
+              </div>
+              <p style={{ margin: '0 0 16px 0', color: '#666' }}>{selectedHome.details}</p>
+              <button 
+                onClick={() => { toggleAvailability(selectedHome); setSelectedHome(null) }}
+                style={{ 
+                  width: '100%', padding: '12px', borderRadius: '8px',
+                  background: selectedHome.available ? '#ef4444' : '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px'
+                }}
+              >
+                {selectedHome.available ? 'Mark as taken' : 'Mark as available'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract Form Modal */}
+      {showContractForm && selectedHome && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => setShowContractForm(false)}>
+          <div style={{
+            background: 'white', borderRadius: '12px', maxWidth: '600px', width: '90%',
+            maxHeight: '80vh', overflowY: 'auto', padding: '24px'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0 }}>Generate Contract</h2>
+              <button onClick={() => setShowContractForm(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+            <p style={{ color: '#666', marginBottom: '16px' }}>Customize contract details for {selectedHome.name}</p>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <label style={{ display: 'block' }}>
+                <strong>Tenant Name</strong>
+                <input
+                  type="text"
+                  value={contractForm.tenantName}
+                  onChange={(e) => setContractForm({ ...contractForm, tenantName: e.target.value })}
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              </label>
+              <label style={{ display: 'block' }}>
+                <strong>Tenant ID Number</strong>
+                <input
+                  type="text"
+                  value={contractForm.tenantId}
+                  onChange={(e) => setContractForm({ ...contractForm, tenantId: e.target.value })}
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              </label>
+              <label style={{ display: 'block' }}>
+                <strong>Tenant Phone</strong>
+                <input
+                  type="text"
+                  value={contractForm.tenantPhone}
+                  onChange={(e) => setContractForm({ ...contractForm, tenantPhone: e.target.value })}
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              </label>
+              <label style={{ display: 'block' }}>
+                <strong>Tenant Email</strong>
+                <input
+                  type="email"
+                  value={contractForm.tenantEmail}
+                  onChange={(e) => setContractForm({ ...contractForm, tenantEmail: e.target.value })}
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <label style={{ display: 'block' }}>
+                  <strong>Start Date</strong>
+                  <input
+                    type="date"
+                    value={contractForm.startDate}
+                    onChange={(e) => setContractForm({ ...contractForm, startDate: e.target.value })}
+                    style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                  />
+                </label>
+                <label style={{ display: 'block' }}>
+                  <strong>End Date</strong>
+                  <input
+                    type="date"
+                    value={contractForm.endDate}
+                    onChange={(e) => setContractForm({ ...contractForm, endDate: e.target.value })}
+                    style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                  />
+                </label>
+              </div>
+              <label style={{ display: 'block' }}>
+                <strong>M-Pesa Paybill</strong>
+                <input
+                  type="text"
+                  value={contractForm.paybill}
+                  onChange={(e) => setContractForm({ ...contractForm, paybill: e.target.value })}
+                  placeholder="e.g., 123456"
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              </label>
+              <label style={{ display: 'block' }}>
+                <strong>Bank Account</strong>
+                <input
+                  type="text"
+                  value={contractForm.bankAccount}
+                  onChange={(e) => setContractForm({ ...contractForm, bankAccount: e.target.value })}
+                  placeholder="e.g., KCB Account 1234567890"
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              </label>
+              <div>
+                <strong>Utilities (Tenant pays)</strong>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={contractForm.utilities.electricity}
+                      onChange={(e) => setContractForm({ ...contractForm, utilities: { ...contractForm.utilities, electricity: e.target.checked } })}
+                    />
+                    Electricity
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={contractForm.utilities.water}
+                      onChange={(e) => setContractForm({ ...contractForm, utilities: { ...contractForm.utilities, water: e.target.checked } })}
+                    />
+                    Water
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={contractForm.utilities.gas}
+                      onChange={(e) => setContractForm({ ...contractForm, utilities: { ...contractForm.utilities, gas: e.target.checked } })}
+                    />
+                    Gas
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={contractForm.utilities.internet}
+                      onChange={(e) => setContractForm({ ...contractForm, utilities: { ...contractForm.utilities, internet: e.target.checked } })}
+                    />
+                    Internet
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={contractForm.utilities.waste}
+                      onChange={(e) => setContractForm({ ...contractForm, utilities: { ...contractForm.utilities, waste: e.target.checked } })}
+                    />
+                    Waste
+                  </label>
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={contractForm.petsAllowed}
+                  onChange={(e) => setContractForm({ ...contractForm, petsAllowed: e.target.checked })}
+                />
+                <strong>Pets Allowed</strong>
+              </label>
+              {contractForm.petsAllowed && (
+                <label style={{ display: 'block' }}>
+                  <strong>Pet Details</strong>
+                  <input
+                    type="text"
+                    value={contractForm.petsDetails}
+                    onChange={(e) => setContractForm({ ...contractForm, petsDetails: e.target.value })}
+                    placeholder="e.g., 1 dog, max 20kg"
+                    style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                  />
+                </label>
+              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={contractForm.parkingIncluded}
+                  onChange={(e) => setContractForm({ ...contractForm, parkingIncluded: e.target.checked })}
+                />
+                <strong>Parking Included</strong>
+              </label>
+              {contractForm.parkingIncluded && (
+                <label style={{ display: 'block' }}>
+                  <strong>Parking Details</strong>
+                  <input
+                    type="text"
+                    value={contractForm.parkingDetails}
+                    onChange={(e) => setContractForm({ ...contractForm, parkingDetails: e.target.value })}
+                    placeholder="e.g., 1 reserved space, covered"
+                    style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                  />
+                </label>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+              <button
+                onClick={() => {
+                  const application = applications.find(app => app.home_id === selectedHome.id)
+                  if (application) {
+                    generateContract(application, selectedHome)
+                  }
+                }}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '8px',
+                  background: '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px'
+                }}
+              >
+                Generate & Download PDF
+              </button>
+              <button
+                onClick={() => setShowContractForm(false)}
+                style={{
+                  padding: '12px 24px', borderRadius: '8px',
+                  background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default AgentDashboard

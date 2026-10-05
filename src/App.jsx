@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminUser, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, submitApplication, updateProfile } from './api'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminUser, fetchAgentProfile, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, resetPassword, submitApplication, updatePassword, updateProfile } from './supabaseApi'
+import { supabase } from './supabaseClient'
 import './App.css'
 
 const initialHomes = [
@@ -153,6 +154,17 @@ const initialHomes = [
 const formatKes = (amount) => `KES ${amount.toLocaleString('en-KE')}`
 const getDirectionsUrl = (home) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${home.name}, ${home.location}, Kenya`)}&travelmode=driving`
 
+const getStatusColor = (status) => {
+  const colors = {
+    'submitted': '#f59e0b',
+    'approved': '#10b981',
+    'declined': '#ef4444',
+    'cancelled': '#6b7280',
+    'refunded': '#8b5cf6',
+  }
+  return colors[status] || '#6b7280'
+}
+
 const normalizeIdentifier = (value) => {
   const trimmed = value.trim().toLowerCase()
   return trimmed.startsWith('+') ? `+${trimmed.slice(1).replace(/\D/g, '')}` : trimmed.replace(/[\s()-]/g, '')
@@ -217,10 +229,12 @@ function App() {
   const [paymentPhone, setPaymentPhone] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [showTenantProfile, setShowTenantProfile] = useState(false)
-  const [activeView, setActiveView] = useState('discover')
+  const [activeView, setActiveView] = useState(storedUser?.role === 'Tenant' ? 'discover' : storedUser?.role === 'Agent' || storedUser?.role === 'SuperAdmin' ? 'agent-homes' : 'discover')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [agentProfileNonce, setAgentProfileNonce] = useState(0)
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
+  const [showAgentProfile, setShowAgentProfile] = useState(false)
+  const [selectedAgentProfile, setSelectedAgentProfile] = useState(null)
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -402,6 +416,16 @@ function App() {
     try { const savedProfile = await updateProfile(tenantProfile, authUser.token); setTenantProfile(savedProfile); setShowTenantProfile(false); setActiveView('discover'); setAuthUser((current) => ({ ...current, ...savedProfile })); showToast('Your profile was updated.') } catch (error) { showToast(error.message) }
   }
 
+  const viewAgentProfile = async (agentId) => {
+    try {
+      const profile = await fetchAgentProfile(agentId, authUser.token)
+      setSelectedAgentProfile(profile)
+      setShowAgentProfile(true)
+    } catch (error) {
+      showToast(error.message)
+    }
+  }
+
   // Opens the signed-in user's own profile from the sidebar profile card.
   const openMyProfile = () => {
     if (!authUser) { setShowAuthScreen(true); return }
@@ -424,10 +448,24 @@ function App() {
         <div className="brand"><span className="brand-mark">h</span><span>habitat</span></div>
         <div className="profile-card clickable" role="button" tabIndex={0} onClick={() => { setMobileMenuOpen(false); openMyProfile() }} onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openMyProfile()}><div className="avatar">{authUser ? authUser.initials : 'G'}</div><div><strong>{authUser ? authUser.name : 'Guest visitor'}</strong><span>{authUser ? `${authUser.role} account` : 'Browse-only access'}</span></div><span className="chevron">⌄</span></div>
         <nav className="main-nav">
-          <button className={`nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
-          <button className={`nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>♡</span> Saved <b>{saved.length}</b></button>
-          <button className={`nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>▣</span> My bookings <b>{booked.length}</b></button>
+          {!authUser && (
+            <button className={`nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
+          )}
+          {authUser?.role === 'Tenant' && (
+            <>
+              <button className={`nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
+              <button className={`nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>♡</span> Saved <b>{saved.length}</b></button>
+              <button className={`nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>▣</span> My bookings <b>{booked.length}</b></button>
+            </>
+          )}
+          {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && (
+            <>
+              <button className={`nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}><span>⌂</span> Homes</button>
+              <button className={`nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}><span>📋</span> Applications</button>
+            </>
+          )}
           {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' || showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
+          {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && <button className={`nav-item ${activeView === 'agent-profile' ? 'active' : ''}`} onClick={() => { setActiveView('agent-profile'); setAgentProfileNonce((n) => n + 1); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
         </nav>
         <div className="sidebar-bottom"><div className="help-icon">?</div><div><strong>Need a hand?</strong><span>Our team is here to help.</span></div><button aria-label="Open help">→</button></div>
       </aside>
@@ -452,7 +490,7 @@ function App() {
           </div>
         </header>
 
-        {role === 'Tenant' && <>
+        {(!authUser || authUser.role === 'Tenant') && <>
           {showTenantProfile && (
             <form className="listing-form profile-form tenant-profile" onSubmit={saveTenantProfile}>
               <div className="form-header-bar">
@@ -473,7 +511,7 @@ function App() {
             </form>
           )}
           {activeView === 'discover' && !showTenantProfile && <>
-          <section className="welcome"><div><p className="eyebrow">Monday, 12 August 2024</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
+          <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
           <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => setRegion(event.target.value)}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
           <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available homes, updated today</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
           <section className="home-grid">{filteredHomes.map(renderHomeCard)}</section>
@@ -491,12 +529,22 @@ function App() {
           </>}
         </>}
 
-        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} />}
+        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : 'profile'} />}
 
-        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} />}
+        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} />}
       </main>
 
-      {role === 'Tenant' && (
+      {!authUser && (
+        <nav className="mobile-bottom-nav">
+          <button className={`mobile-nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setMobileMenuOpen(false) }}>
+            <span>⌂</span> Discover
+          </button>
+          <button className={`mobile-nav-item`} onClick={() => setShowAuthScreen(true)}>
+            <span>♙</span> Sign in
+          </button>
+        </nav>
+      )}
+      {authUser?.role === 'Tenant' && (
         <nav className="mobile-bottom-nav">
           <button className={`mobile-nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
             <span>⌂</span> Discover
@@ -509,8 +557,8 @@ function App() {
             <span>▣</span> Bookings
             {booked.length > 0 && <b className="mobile-nav-badge">{booked.length}</b>}
           </button>
-          <button className={`mobile-nav-item ${showTenantProfile ? 'active' : ''}`} onClick={() => { if (!authUser) { setShowAuthScreen(true) } else { setShowTenantProfile(true); setActiveView('profile') } setMobileMenuOpen(false) }}>
-            <span>♙</span> {authUser ? 'Profile' : 'Sign in'}
+          <button className={`mobile-nav-item ${showTenantProfile ? 'active' : ''}`} onClick={() => { setShowTenantProfile(true); setActiveView('profile'); setMobileMenuOpen(false) }}>
+            <span>♙</span> Profile
           </button>
         </nav>
       )}
@@ -532,7 +580,12 @@ function App() {
               <div className="agent-profile">
                 <div className="avatar">{(selectedHome.agent_name || 'Agent').slice(0, 2).toUpperCase()}</div>
                 <div style={{ flex: 1 }}>
-                  <strong>{selectedHome.agent_name || 'House agent'}</strong>
+                  <strong 
+                    onClick={() => selectedHome.agent_id && viewAgentProfile(selectedHome.agent_id)}
+                    style={{ cursor: 'pointer', ':hover': { textDecoration: 'underline' } }}
+                  >
+                    {selectedHome.agent_name || 'House agent'}
+                  </strong>
                   <span>{selectedHome.agent_company || 'Habitat verified agent'}</span>
                   <small className="agent-phone-display">
                     📞 {selectedHome.agent_phone || '+254712345678'}
@@ -584,6 +637,52 @@ function App() {
           </form>
         </div>
       )}
+
+      {/* Agent Profile Modal */}
+      {showAgentProfile && selectedAgentProfile && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }} onClick={() => { setShowAgentProfile(false); setSelectedAgentProfile(null) }}>
+          <div style={{ 
+            background: 'white', padding: '32px', borderRadius: '12px', maxWidth: '500px', width: '90%',
+            maxHeight: '80vh', overflowY: 'auto'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2>Agent Profile</h2>
+              <button onClick={() => { setShowAgentProfile(false); setSelectedAgentProfile(null) }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
+              <div className="avatar" style={{ width: '80px', height: '80px', fontSize: '32px' }}>{selectedAgentProfile.initials}</div>
+              <div>
+                <h3 style={{ margin: '0 0 4px 0' }}>{selectedAgentProfile.name}</h3>
+                <p style={{ margin: '0', color: '#666' }}>{selectedAgentProfile.role}</p>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div><strong>Email/Phone:</strong> {selectedAgentProfile.identifier}</div>
+              {selectedAgentProfile.phone && <div><strong>Phone:</strong> {selectedAgentProfile.phone}</div>}
+              {selectedAgentProfile.company && <div><strong>Company:</strong> {selectedAgentProfile.company}</div>}
+              {selectedAgentProfile.occupation && <div><strong>Occupation:</strong> {selectedAgentProfile.occupation}</div>}
+              {selectedAgentProfile.national_id && <div><strong>National ID:</strong> {selectedAgentProfile.national_id}</div>}
+              {selectedAgentProfile.bio && <div><strong>About:</strong> {selectedAgentProfile.bio}</div>}
+              <div><strong>Member since:</strong> {new Date(selectedAgentProfile.created_at).toLocaleDateString()}</div>
+            </div>
+            {selectedAgentProfile.phone && (
+              <div className="agent-contact-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                <a href={`tel:${cleanPhoneNumber(selectedAgentProfile.phone)}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '8px' }}>
+                  <span>📞</span> Call Agent
+                </a>
+                <a href={getWhatsAppUrl(selectedAgentProfile.phone)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '8px' }}>
+                  <span>💬</span> WhatsApp
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
@@ -600,15 +699,17 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [resetMode, setResetMode] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
 
   useEffect(() => {
     const identifierInput = document.querySelector('.auth-panel input[type="email"]')
     if (identifierInput) {
       identifierInput.setAttribute('type', 'text')
-      identifierInput.setAttribute('placeholder', 'you@example.com or 0712345678')
+      identifierInput.setAttribute('placeholder', 'you@example.com')
       identifierInput.form?.setAttribute('novalidate', '')
       const identifierLabel = identifierInput.closest('label')
-      if (identifierLabel?.firstChild) identifierLabel.firstChild.textContent = 'Email or phone number'
+      if (identifierLabel?.firstChild) identifierLabel.firstChild.textContent = 'Email address'
     }
   }, [mode])
 
@@ -617,14 +718,31 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
     setError('')
     setSuccess('')
 
+    if (resetMode) {
+      if (!newPassword || newPassword.length < 8) {
+        setError('Password must be at least 8 characters long.')
+        return
+      }
+      try {
+        await updatePassword(newPassword)
+        setResetMode(false)
+        setNewPassword('')
+        setSuccess('Password updated successfully. Please sign in with your new password.')
+      } catch (error) {
+        setError(error.message)
+      }
+      return
+    }
+
     if (mode === 'register') {
       if (!name.trim() || !identifier.trim() || !password.trim() || !confirmPassword.trim()) {
         setError('Complete all fields to create your account.')
         return
       }
       const normalizedIdentifier = normalizeIdentifier(identifier)
-      if (!isValidIdentifier(normalizedIdentifier)) {
-        setError('Enter a valid email address or Kenyan phone number, such as +254712345678.')
+      // For now, only email registration is supported (phone auth requires SMS provider setup)
+      if (!isValidEmail(normalizedIdentifier)) {
+        setError('Please enter a valid email address. Phone registration requires additional setup.')
         return
       }
       if (password !== confirmPassword) {
@@ -641,11 +759,19 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
       }
       const initials = name.trim().split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
       try {
-        await onCreateAccount({ identifier: normalizedIdentifier, password, name: name.trim(), initials, role: 'Tenant' })
-        setMode('login')
-        setPassword('')
-        setConfirmPassword('')
-        setSuccess('Tenant account created successfully. Please sign in below.')
+        const result = await onCreateAccount({ identifier: normalizedIdentifier, password, name: name.trim(), initials, role: 'Tenant' })
+        // If email verification is required, switch to login mode
+        if (result.requiresEmailVerification) {
+          setMode('login')
+          setPassword('')
+          setConfirmPassword('')
+          setSuccess('Please check your email to verify your account before logging in.')
+        } else {
+          setMode('login')
+          setPassword('')
+          setConfirmPassword('')
+          setSuccess('Tenant account created successfully. Please sign in below.')
+        }
       } catch (error) {
         setError(error.message)
       }
@@ -653,12 +779,12 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
     }
 
     if (!identifier.trim() || !password.trim()) {
-      setError('Enter your email or phone number and password to continue.')
+      setError('Enter your email address and password to continue.')
       return
     }
     const normalizedIdentifier = normalizeIdentifier(identifier)
-    if (!isValidIdentifier(normalizedIdentifier)) {
-      setError('Enter a valid email address or Kenyan phone number.')
+    if (!isValidEmail(normalizedIdentifier)) {
+      setError('Enter a valid email address.')
       return
     }
     if (password.length < 8) {
@@ -707,7 +833,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
 
           {mode === 'register' && (
             <div className="role-restriction-notice">
-              <strong>Notice:</strong> Only tenant accounts can self-register. Agents and administrators cannot create accounts here—they are provisioned by an admin and should use the <em>Sign in</em> option.
+              <strong>Notice:</strong> Only tenant accounts can self-register. Email authentication is currently supported. Phone authentication requires additional SMS provider setup. Agents and administrators cannot create accounts here—they are provisioned by an admin and should use the <em>Sign in</em> option.
             </div>
           )}
 
@@ -719,16 +845,35 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
               </label>
             )}
             <label>
-              Email address or phone
-              <input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com or 0712345678" />
+              Email address
+              <input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError('') }} placeholder="you@example.com" />
             </label>
             <label>
               Password
               <div className="password-field">
                 <input type="password" value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} placeholder="Enter your password" />
-                {mode === 'login' && <button type="button" onClick={() => setError('Password reset will be available once connected to your backend.')}>Forgot?</button>}
+                {mode === 'login' && !resetMode && <button type="button" onClick={async () => {
+                  if (!identifier.trim() || !isValidEmail(identifier)) {
+                    setError('Enter your email address to reset password.')
+                    return
+                  }
+                  try {
+                    await resetPassword(identifier)
+                    setResetMode(true)
+                    setSuccess('Password reset link sent to your email. Check your inbox.')
+                  } catch (error) {
+                    setError(error.message)
+                  }
+                }}>Forgot?</button>}
+                {resetMode && <button type="button" onClick={() => { setResetMode(false); setNewPassword('') }}>Back to login</button>}
               </div>
             </label>
+            {resetMode && (
+              <label>
+                New password
+                <input type="password" value={newPassword} onChange={(event) => { setNewPassword(event.target.value); setError('') }} placeholder="Enter your new password (min 8 characters)" />
+              </label>
+            )}
             {mode === 'register' && (
               <label>
                 Confirm password
@@ -754,7 +899,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
             {success && <p className="auth-success">{success}</p>}
 
             <button className="auth-submit" type="submit">
-              {mode === 'login' ? `Continue to ${role === 'SuperAdmin' ? 'admin' : role.toLowerCase()} dashboard` : 'Create tenant account'} <span>→</span>
+              {resetMode ? 'Update password' : mode === 'login' ? `Continue to ${role === 'SuperAdmin' ? 'admin' : role.toLowerCase()} dashboard` : 'Create tenant account'} <span>→</span>
             </button>
           </form>
 
@@ -770,11 +915,25 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
   )
 }
 
-function SuperAdminPanel({ token, currentUserId, onNotify }) {
+function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
   const [overview, setOverview] = useState(null)
   const [users, setUsers] = useState([])
-  const [search, setSearch] = useState('')
+  const [homes, setHomes] = useState([])
+  const [applications, setApplications] = useState([])
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState('All')
+  const [homeSearch, setHomeSearch] = useState('')
+  const [homeRegionFilter, setHomeRegionFilter] = useState('All regions')
+  const [homeCategoryFilter, setHomeCategoryFilter] = useState('All categories')
+  const [applicationSearch, setApplicationSearch] = useState('')
+  const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
+  const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
   const [loading, setLoading] = useState(true)
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [showUserDetails, setShowUserDetails] = useState(false)
+  const [selectedView, setSelectedView] = useState(null) // 'users', 'homes', 'applications', 'payments'
+  const [showProfile, setShowProfile] = useState(false)
+  const [profile, setProfile] = useState({ name: '', phone: '', occupation: '', bio: '', company: '' })
   const emptyNewUser = { name: '', identifier: '', password: '', role: 'Agent' }
   const [showAddUser, setShowAddUser] = useState(false)
   const [newUser, setNewUser] = useState(emptyNewUser)
@@ -786,6 +945,18 @@ function SuperAdminPanel({ token, currentUserId, onNotify }) {
       const [stats, people] = await Promise.all([fetchSuperAdminOverview(token), fetchSuperAdminUsers(token)])
       setOverview(stats)
       setUsers(people)
+      
+      // Also fetch homes and applications for detailed views
+      const allHomes = await fetchHomes({})
+      setHomes(allHomes)
+      
+      // Fetch all applications (admin can see all)
+      const { data: allApps } = await supabase.from('applications').select(`
+        *,
+        homes (name, location),
+        profiles!applications_tenant_id_fkey (name, phone)
+      `).order('created_at', { ascending: false })
+      setApplications(allApps || [])
     } catch (error) {
       onNotify(error.message)
     } finally {
@@ -794,6 +965,22 @@ function SuperAdminPanel({ token, currentUserId, onNotify }) {
   }, [token, onNotify])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Sync with sidebar navigation
+  useEffect(() => {
+    if (activeView === 'agent-homes') {
+      setSelectedView('homes')
+      setShowProfile(false)
+    } else if (activeView === 'agent-applications') {
+      setSelectedView('applications')
+      setShowProfile(false)
+    } else if (activeView === 'agent-profile') {
+      setShowProfile(true)
+      setSelectedView(null)
+      // Load profile
+      fetchProfile(token).then(setProfile).catch(onNotify)
+    }
+  }, [activeView, token, onNotify])
 
   const createUser = async (event) => {
     event.preventDefault()
@@ -818,45 +1005,464 @@ function SuperAdminPanel({ token, currentUserId, onNotify }) {
     } catch (error) { onNotify(error.message) }
   }
 
+  const viewUserDetails = (user) => {
+    setSelectedUser(user)
+    setShowUserDetails(true)
+  }
+
   const filteredUsers = users.filter((user) => {
-    const haystack = `${user.name} ${user.identifier} ${user.role} ${user.company || ''}`.toLowerCase()
-    return haystack.includes(search.trim().toLowerCase())
+    if (userRoleFilter !== 'All' && user.role !== userRoleFilter) return false
+    const haystack = `${user.name} ${user.identifier} ${user.company || ''}`.toLowerCase()
+    return haystack.includes(userSearch.trim().toLowerCase())
+  })
+
+  const filteredHomes = homes.filter((home) => {
+    const search = homeSearch.trim().toLowerCase()
+    const matchesSearch = !search ||
+      home.name.toLowerCase().includes(search) ||
+      home.location.toLowerCase().includes(search) ||
+      home.region.toLowerCase().includes(search) ||
+      home.type.toLowerCase().includes(search) ||
+      (home.agent_name || '').toLowerCase().includes(search)
+    const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+    const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+    return matchesSearch && matchesRegion && matchesCategory
   })
 
   const stats = [
-    { label: 'Total users', value: overview?.users, hint: 'All accounts' },
-    { label: 'Tenants', value: overview?.tenants, hint: 'House seekers' },
-    { label: 'Agents', value: overview?.agents, hint: 'Listing owners' },
-    { label: 'Homes', value: overview?.homes, hint: `${overview?.availableHomes ?? 0} available` },
-    { label: 'Applications', value: overview?.applications, hint: `${overview?.pendingApplications ?? 0} pending` },
-    { label: 'Deposit payments', value: overview?.payments, hint: 'Pending or paid' },
+    { label: 'Total users', value: overview?.users, view: 'users', roleFilter: 'All' },
+    { label: 'Tenants', value: overview?.tenants, view: 'users', roleFilter: 'Tenant' },
+    { label: 'Agents', value: overview?.agents, view: 'users', roleFilter: 'Agent' },
+    { label: 'Homes', value: overview?.homes, view: 'homes' },
+    { label: 'Applications', value: overview?.applications, view: 'applications' },
+    { label: 'Deposit payments', value: overview?.payments, view: 'payments' },
   ]
 
-  return <section className="management">
-    <div className="management-header">
-      <div><p className="eyebrow">System control</p><h1>Super-admin panel</h1><p>Monitor the platform and manage every account.</p></div>
-      <div className="management-actions"><button onClick={() => loadData()}>Refresh ↻</button></div>
-    </div>
-    <div className="stat-grid">{stats.map((stat) => <div key={stat.label}><span>{stat.label}</span><strong>{loading || stat.value == null ? '—' : stat.value}</strong><small>{stat.hint}</small></div>)}</div>
-    <div className="table-panel user-panel">
-      <div className="table-title"><h2>Application users</h2><span>{filteredUsers.length} of {users.length} accounts</span><button className="add-user-button" onClick={() => setShowAddUser((current) => !current)}>{showAddUser ? 'Close' : '+ Add user'}</button></div>
-      {showAddUser && <form className="add-user-form" onSubmit={createUser}>
-        <label>Full name<input required value={newUser.name} onChange={(event) => setNewUser({ ...newUser, name: event.target.value })} placeholder="Jane Wanjiru" /></label>
-        <label>Email or phone<input required value={newUser.identifier} onChange={(event) => setNewUser({ ...newUser, identifier: event.target.value })} placeholder="jane@example.com or 0712345678" /></label>
-        <label>Temporary password<input required type="password" value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} placeholder="At least 8 characters" /></label>
-        <label>Role<select value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value })}><option value="Agent">Agent</option><option value="Tenant">Tenant</option><option value="SuperAdmin">SuperAdmin</option></select></label>
-        <button className="primary-action" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add user'} <span>→</span></button>
-      </form>}
-      <div className="search-field admin-user-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, role or company" /></div>
-      {filteredUsers.map((user) => <div className="user-row" key={user.id}>
-        <div className="avatar">{user.name.slice(0, 2).toUpperCase()}</div>
-        <div><strong>{user.name}{user.id === currentUserId && <em> (you)</em>}</strong><span>{user.identifier}{user.company ? ` · ${user.company}` : ''}</span></div>
-        <span className="role-static">{user.role}</span>
-        {user.id === currentUserId ? <span /> : <button className="remove-user" onClick={() => removeUser(user)}>Remove</button>}
-      </div>)}
-      {!loading && filteredUsers.length === 0 && <div className="empty-state"><strong>No users found</strong><span>Try a different search.</span></div>}
-    </div>
-  </section>
+  return (
+    <section className="management">
+      <div className="management-header">
+        <div><p className="eyebrow">System control</p><h1>Super-admin panel</h1><p>Monitor the platform and manage every account.</p></div>
+        <div className="management-actions">
+          <button onClick={() => loadData()}>Refresh ↻</button>
+          <button onClick={() => setShowAddUser(true)}>+ Add user</button>
+        </div>
+      </div>
+
+      {/* Stat Grid - Only show when no detailed view is selected */}
+      {!selectedView && (
+        <div className="stat-grid">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              onClick={() => {
+                setSelectedView(stat.view)
+                if (stat.view === 'users') setUserRoleFilter(stat.roleFilter || 'All')
+              }}
+              style={{
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                ':hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }
+              }}
+            >
+              <span>{stat.label}</span>
+              <strong>{loading || stat.value == null ? '—' : stat.value}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Detailed Views - Replaces stat grid when selected */}
+      {selectedView && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0 }}>{selectedView.charAt(0).toUpperCase() + selectedView.slice(1)}</h2>
+            <button onClick={() => setSelectedView(null)} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back to overview</button>
+          </div>
+
+          {selectedView === 'users' && (
+            <div className="table-panel user-panel">
+              <div className="table-title">
+                <h2>Users</h2>
+                <span>{filteredUsers.length} account{filteredUsers.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="users-toolbar">
+                <div className="search-field admin-user-search">
+                  <span>⌕</span>
+                  <input
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                    placeholder="Search by name, email or company"
+                  />
+                </div>
+                <select
+                  className="role-filter"
+                  value={userRoleFilter}
+                  onChange={(event) => setUserRoleFilter(event.target.value)}
+                  aria-label="Filter users by role"
+                >
+                  <option value="All">All roles</option>
+                  <option value="Tenant">Tenant</option>
+                  <option value="Agent">Agent</option>
+                  <option value="SuperAdmin">SuperAdmin</option>
+                </select>
+              </div>
+              <div className="users-table-wrap">
+                <table className="users-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Contact</th>
+                      <th>Company</th>
+                      <th>Role</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} onClick={() => viewUserDetails(user)}>
+                        <td>
+                          <div className="users-table-name">
+                            <div className="avatar">{user.name.slice(0, 2).toUpperCase()}</div>
+                            <strong>{user.name}{user.id === currentUserId && <em> (you)</em>}</strong>
+                          </div>
+                        </td>
+                        <td>{user.identifier}</td>
+                        <td>{user.company || '—'}</td>
+                        <td><span className="role-static">{user.role}</span></td>
+                        <td>
+                          {user.id !== currentUserId && (
+                            <button
+                              className="remove-user"
+                              onClick={(event) => { event.stopPropagation(); removeUser(user) }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!loading && filteredUsers.length === 0 && (
+                <div className="empty-state">
+                  <strong>No users found</strong>
+                  <span>Try a different search or role filter.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedView === 'homes' && (
+            <div className="table-panel">
+              <div className="table-title">
+                <h2>Homes</h2>
+                <span>{filteredHomes.length} home{filteredHomes.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="users-toolbar">
+                <div className="search-field admin-user-search">
+                  <span>⌕</span>
+                  <input
+                    value={homeSearch}
+                    onChange={(event) => setHomeSearch(event.target.value)}
+                    placeholder="Search by neighbourhood or home"
+                  />
+                </div>
+                <select
+                  className="role-filter"
+                  value={homeRegionFilter}
+                  onChange={(event) => setHomeRegionFilter(event.target.value)}
+                  aria-label="Filter homes by region"
+                >
+                  <option value="All regions">All regions</option>
+                  <option value="Nairobi County">Nairobi County</option>
+                  <option value="Mombasa County">Mombasa County</option>
+                  <option value="Kisumu County">Kisumu County</option>
+                  <option value="Nakuru County">Nakuru County</option>
+                  <option value="Kiambu County">Kiambu County</option>
+                </select>
+                <select
+                  className="role-filter"
+                  value={homeCategoryFilter}
+                  onChange={(event) => setHomeCategoryFilter(event.target.value)}
+                  aria-label="Filter homes by category"
+                >
+                  <option value="All categories">All categories</option>
+                  <option value="Studio">Studio</option>
+                  <option value="One bedroom">One bedroom</option>
+                  <option value="Two bedroom">Two bedroom</option>
+                  <option value="Three bedroom">Three bedroom</option>
+                  <option value="Four bedroom">Four bedroom</option>
+                </select>
+              </div>
+              <div className="users-table-wrap">
+                <table className="users-table homes-table">
+                  <thead>
+                    <tr>
+                      <th>Home</th>
+                      <th>Location</th>
+                      <th>Region</th>
+                      <th>Category</th>
+                      <th>Rent</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHomes.map((home) => (
+                      <tr key={home.id}>
+                        <td>
+                          <div className="users-table-name">
+                            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                            <strong>{home.name}</strong>
+                          </div>
+                        </td>
+                        <td>{home.location}</td>
+                        <td>{home.region}</td>
+                        <td>{home.type}</td>
+                        <td>{formatKes(home.price)}/mo</td>
+                        <td>
+                          <span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: home.available ? '#10b981' : '#ef4444', color: 'white' }}>
+                            {home.available ? 'Available' : 'Taken'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!loading && filteredHomes.length === 0 && (
+                <div className="empty-state">
+                  <strong>No homes found</strong>
+                  <span>Try a different search, region, or category.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedView === 'applications' && (
+            <div className="table-panel">
+              <div className="table-title">
+                <h2>All Applications</h2>
+                <span>{applications.length} application{applications.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="users-toolbar">
+                <div className="search-field admin-user-search">
+                  <span>⌕</span>
+                  <input
+                    value={applicationSearch}
+                    onChange={(event) => setApplicationSearch(event.target.value)}
+                    placeholder="Search by tenant name or home"
+                  />
+                </div>
+                <select
+                  className="role-filter"
+                  value={applicationRegionFilter}
+                  onChange={(event) => setApplicationRegionFilter(event.target.value)}
+                  aria-label="Filter applications by region"
+                >
+                  <option value="All regions">All regions</option>
+                  <option value="Nairobi County">Nairobi County</option>
+                  <option value="Mombasa County">Mombasa County</option>
+                  <option value="Kisumu County">Kisumu County</option>
+                  <option value="Nakuru County">Nakuru County</option>
+                  <option value="Kiambu County">Kiambu County</option>
+                </select>
+                <select
+                  className="role-filter"
+                  value={applicationCategoryFilter}
+                  onChange={(event) => setApplicationCategoryFilter(event.target.value)}
+                  aria-label="Filter applications by category"
+                >
+                  <option value="All categories">All categories</option>
+                  <option value="Studio">Studio</option>
+                  <option value="One bedroom">One bedroom</option>
+                  <option value="Two bedroom">Two bedroom</option>
+                  <option value="Three bedroom">Three bedroom</option>
+                  <option value="Four bedroom">Four bedroom</option>
+                </select>
+              </div>
+              <div className="users-table-wrap">
+                <table className="users-table applications-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>Home</th>
+                      <th>Location</th>
+                      <th>Region</th>
+                      <th>Category</th>
+                      <th>Deposit</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {applications.filter(app => {
+                      const search = applicationSearch.toLowerCase()
+                      const matchesSearch = !search ||
+                        (app.profiles?.name || '').toLowerCase().includes(search) ||
+                        (app.homes?.name || '').toLowerCase().includes(search) ||
+                        (app.homes?.location || '').toLowerCase().includes(search)
+                      const matchesRegion = applicationRegionFilter === 'All regions' || (app.homes?.region || '') === applicationRegionFilter
+                      const matchesCategory = applicationCategoryFilter === 'All categories' || (app.homes?.type || '') === applicationCategoryFilter
+                      return matchesSearch && matchesRegion && matchesCategory
+                    }).map((app) => (
+                      <tr key={app.id}>
+                        <td>
+                          <div className="users-table-name">
+                            <div className="avatar">{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                            <strong>{app.profiles?.name || 'Tenant'}</strong>
+                          </div>
+                        </td>
+                        <td>{app.homes?.name || '—'}</td>
+                        <td>{app.homes?.location || '—'}</td>
+                        <td>{app.homes?.region || '—'}</td>
+                        <td>{app.homes?.type || '—'}</td>
+                        <td>{formatKes(app.homes?.deposit || 0)}</td>
+                        <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: getStatusColor(app.status), color: 'white' }}>{app.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!loading && applications.filter(app => {
+                const search = applicationSearch.toLowerCase()
+                const matchesSearch = !search ||
+                  (app.profiles?.name || '').toLowerCase().includes(search) ||
+                  (app.homes?.name || '').toLowerCase().includes(search) ||
+                  (app.homes?.location || '').toLowerCase().includes(search)
+                const matchesRegion = applicationRegionFilter === 'All regions' || (app.homes?.region || '') === applicationRegionFilter
+                const matchesCategory = applicationCategoryFilter === 'All categories' || (app.homes?.type || '') === applicationCategoryFilter
+                return matchesSearch && matchesRegion && matchesCategory
+              }).length === 0 && (
+                <div className="empty-state">
+                  <strong>No applications found</strong>
+                  <span>Try a different search, region, or category.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedView === 'payments' && (
+            <div className="table-panel">
+              <div className="table-title">
+                <h2>Payments</h2>
+                <span>{applications.filter(a => a.payment_status === 'paid').length} paid</span>
+              </div>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {applications.filter(a => ['pending', 'paid'].includes(a.payment_status)).map((app) => (
+                  <div key={app.id} style={{ 
+                    background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px',
+                    display: 'flex', gap: '16px', alignItems: 'center'
+                  }}>
+                    <div className="avatar">{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                    <div style={{ flex: 1 }}>
+                      <strong>{app.profiles?.name || 'Tenant'}</strong>
+                      <span>{app.homes?.name}</span>
+                      <small>{formatKes(app.payment_amount || 0)} via {app.payment_phone}</small>
+                    </div>
+                    <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: app.payment_status === 'paid' ? '#10b981' : '#f59e0b', color: 'white' }}>
+                      {app.payment_status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showProfile && (
+        <form className="listing-form profile-form" onSubmit={async (event) => {
+          event.preventDefault()
+          try {
+            const updated = await updateProfile({ name: profile.name, phone: profile.phone, occupation: profile.occupation, bio: profile.bio, company: profile.company }, token)
+            onNotify('Profile updated.')
+            setShowProfile(false)
+          } catch (error) { onNotify(error.message) }
+        }} style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <div className="form-header-bar">
+            <h2>My profile</h2>
+            <button type="button" className="in-app-back-button" onClick={() => setShowProfile(false)}>← Back to overview</button>
+          </div>
+          <p className="form-help">These details are visible to other users.</p>
+          <div className="form-grid">
+            <label>Full name<input required value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label>
+            <label>Phone number<input value={profile.phone} onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+            <label>Company<input value={profile.company} onChange={(event) => setProfile({ ...profile, company: event.target.value })} /></label>
+            <label>Occupation<input value={profile.occupation} onChange={(event) => setProfile({ ...profile, occupation: event.target.value })} /></label>
+            <label className="wide-field">About you<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
+          </div>
+          <button className="primary-action" type="submit">Save changes <span>→</span></button>
+        </form>
+      )}
+
+      {!selectedView && !showProfile && (
+        <>
+          {showAddUser && (
+        <div className="add-user-modal" style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <form className="add-user-form" onSubmit={createUser} style={{ 
+            background: 'white', padding: '24px', borderRadius: '12px', maxWidth: '400px', width: '90%'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2>Add New User</h2>
+              <button type="button" onClick={() => setShowAddUser(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+            <label>Full name<input required value={newUser.name} onChange={(event) => setNewUser({ ...newUser, name: event.target.value })} placeholder="Jane Wanjiru" /></label>
+            <label>Email or phone<input required value={newUser.identifier} onChange={(event) => setNewUser({ ...newUser, identifier: event.target.value })} placeholder="jane@example.com or 0712345678" /></label>
+            <label>Temporary password<input required type="password" value={newUser.password} onChange={(event) => setNewUser({ ...newUser, password: event.target.value })} placeholder="At least 8 characters" /></label>
+            <label>Role<select value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value })}><option value="Agent">Agent</option><option value="Tenant">Tenant</option><option value="SuperAdmin">SuperAdmin</option></select></label>
+            <button className="primary-action" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add user'} <span>→</span></button>
+          </form>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* User Details Modal */}
+      {showUserDetails && selectedUser && (
+        <div className="user-details-modal" style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{ 
+            background: 'white', padding: '32px', borderRadius: '12px', maxWidth: '500px', width: '90%',
+            maxHeight: '80vh', overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2>User Details</h2>
+              <button onClick={() => { setShowUserDetails(false); setSelectedUser(null) }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
+              <div className="avatar" style={{ width: '80px', height: '80px', fontSize: '32px' }}>{selectedUser.name.slice(0, 2).toUpperCase()}</div>
+              <div>
+                <h3 style={{ margin: '0 0 4px 0' }}>{selectedUser.name}</h3>
+                <p style={{ margin: '0', color: '#666' }}>{selectedUser.role}</p>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div><strong>Email/Phone:</strong> {selectedUser.identifier}</div>
+              {selectedUser.company && <div><strong>Company:</strong> {selectedUser.company}</div>}
+              <div><strong>Created:</strong> {new Date(selectedUser.createdAt).toLocaleDateString()}</div>
+              <div><strong>Role:</strong> {selectedUser.role}</div>
+            </div>
+            {selectedUser.id !== currentUserId && (
+              <button 
+                className="remove-user" 
+                onClick={() => { removeUser(selectedUser); setShowUserDetails(false); setSelectedUser(null) }}
+                style={{ marginTop: '24px', width: '100%', padding: '12px' }}
+              >
+                Remove User
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default App
