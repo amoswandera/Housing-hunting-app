@@ -230,7 +230,7 @@ function App() {
   const [paymentPhone, setPaymentPhone] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [showTenantProfile, setShowTenantProfile] = useState(false)
-  const [activeView, setActiveView] = useState(storedUser?.role === 'Tenant' ? 'discover' : storedUser?.role === 'Agent' || storedUser?.role === 'SuperAdmin' ? 'agent-homes' : 'discover')
+  const [activeView, setActiveView] = useState(storedUser?.role === 'Tenant' ? 'discover' : storedUser?.role === 'SuperAdmin' ? 'agent-dashboard' : storedUser?.role === 'Agent' ? 'agent-homes' : 'discover')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [agentProfileNonce, setAgentProfileNonce] = useState(0)
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
@@ -491,6 +491,7 @@ function App() {
           )}
           {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && (
             <>
+              {authUser?.role === 'SuperAdmin' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
               <button className={`nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}><span>⌂</span> Homes</button>
               <button className={`nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}><span>📋</span> Applications</button>
             </>
@@ -562,7 +563,7 @@ function App() {
 
         {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : 'profile'} />}
 
-        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} />}
+        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => setActiveView('agent-dashboard')} />}
       </main>
 
       {!authUser && (
@@ -1002,7 +1003,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
   )
 }
 
-function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
+function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToDashboard }) {
   const [overview, setOverview] = useState(null)
   const [users, setUsers] = useState([])
   const [homes, setHomes] = useState([])
@@ -1051,7 +1052,10 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
 
   // Sync with sidebar navigation
   useEffect(() => {
-    if (activeView === 'agent-homes') {
+    if (activeView === 'agent-dashboard') {
+      setSelectedView(null)
+      setShowProfile(false)
+    } else if (activeView === 'agent-homes') {
       setSelectedView('homes')
       setShowProfile(false)
     } else if (activeView === 'agent-applications') {
@@ -1159,7 +1163,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ margin: 0 }}>{selectedView.charAt(0).toUpperCase() + selectedView.slice(1)}</h2>
-            <button onClick={() => setSelectedView(null)} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back to overview</button>
+            <button onClick={() => { setSelectedView(null); onBackToDashboard?.() }} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back to overview</button>
           </div>
 
           {selectedView === 'users' && (
@@ -1464,7 +1468,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
         }} style={{ maxWidth: '600px', margin: '0 auto' }}>
           <div className="form-header-bar">
             <h2>My profile</h2>
-            <button type="button" className="in-app-back-button" onClick={() => setShowProfile(false)}>← Back to overview</button>
+            <button type="button" className="in-app-back-button" onClick={() => { setShowProfile(false); onBackToDashboard?.() }}>← Back to overview</button>
           </div>
           <p className="form-help">These details are visible to other users.</p>
           <div className="form-grid">
