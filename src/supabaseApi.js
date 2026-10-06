@@ -135,6 +135,7 @@ export const loginUser = async (credentials) => {
 
   return {
     token: authResult.data.session.access_token,
+    refreshToken: authResult.data.session.refresh_token,
     user: {
       id: profile.id,
       name: profile.name,
@@ -277,7 +278,8 @@ export const updateProfile = async (profile, token) => {
 
 // Homes functions
 export const fetchHomes = async (filters = {}) => {
-  let query = supabase
+  // First fetch homes with their images
+  const { data: homesData, error: homesError } = await supabase
     .from('homes')
     .select(`
       *,
@@ -290,69 +292,303 @@ export const fetchHomes = async (filters = {}) => {
     `)
     .eq('available', true)
 
+  handleSupabaseError(homesError)
+
+  // Get all home IDs
+  const homeIds = homesData.map(h => h.id)
+
+  // Try to fetch images for all homes (gracefully fail if table doesn't exist yet)
+  let imagesByHome = {}
+  try {
+    const { data: imagesData, error: imagesError } = await supabase
+      .from('home_images')
+      .select('*')
+      .in('home_id', homeIds.length > 0 ? homeIds : [])
+      .order('order_index', { ascending: true })
+
+    // Only handle error if it's not a "relation does not exist" error
+    if (imagesError && !imagesError.message.includes('does not exist')) {
+      handleSupabaseError(imagesError)
+    }
+
+    // Group images by home_id, normalising image_url → url so the gallery
+    // renderer always reads img.url regardless of how images were stored.
+    if (imagesData) {
+      imagesData.forEach(img => {
+        if (!imagesByHome[img.home_id]) {
+          imagesByHome[img.home_id] = []
+        }
+        imagesByHome[img.home_id].push({
+          ...img,
+          url: img.image_url || img.url || '',
+        })
+      })
+    }
+  } catch (error) {
+    // If home_images table doesn't exist yet, we'll use the single image fallback
+    console.log('home_images table not yet created, using single image fallback')
+  }
+
+  // Apply filters
+  let filteredHomes = homesData
   if (filters.region && filters.region !== 'All regions') {
-    query = query.eq('region', filters.region)
+    filteredHomes = filteredHomes.filter(h => h.region === filters.region)
   }
   if (filters.type && filters.type !== 'All categories') {
-    query = query.eq('type', filters.type)
+    filteredHomes = filteredHomes.filter(h => h.type === filters.type)
   }
   if (filters.search) {
-    query = query.or(`name.ilike.%${filters.search}%,location.ilike.%${filters.search}%,type.ilike.%${filters.search}%`)
+    filteredHomes = filteredHomes.filter(h =>
+      h.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      h.location.toLowerCase().includes(filters.search.toLowerCase()) ||
+      h.type.toLowerCase().includes(filters.search.toLowerCase())
+    )
   }
 
-  const { data, error } = await query.order('created_at', { ascending: false })
-  handleSupabaseError(error)
-
   // Ensure data is an array before mapping
-  if (!data || !Array.isArray(data)) {
+  if (!filteredHomes || !Array.isArray(filteredHomes)) {
     return []
   }
 
-  return data.map((home) => ({
-    ...home,
-    parking: Boolean(home.parking),
-    available: Boolean(home.available),
-    agent_id: home.owner_id,
-    agent_name: home.profiles?.name || '',
-    agent_phone: home.profiles?.phone || '',
-    agent_bio: home.profiles?.bio || '',
-    agent_company: home.profiles?.company || '',
-  }))
+  return filteredHomes.map((home) => {
+    const imgs = imagesByHome[home.id] || [{ url: home.image, is_primary: true, order_index: 0 }]
+    // If the home was added by file upload, homes.image may be empty.
+    // Use the primary (or first) image from home_images as the card thumbnail.
+    const primaryImage = imgs.find(i => i.is_primary) || imgs[0]
+    const cardImage = home.image || primaryImage?.url || ''
+    return {
+      ...home,
+      parking: Boolean(home.parking),
+      available: Boolean(home.available),
+      agent_id: home.owner_id,
+      agent_name: home.profiles?.name || '',
+      agent_phone: home.profiles?.phone || '',
+      agent_bio: home.profiles?.bio || '',
+      agent_company: home.profiles?.company || '',
+      image: cardImage,
+      images: imgs,
+    }
+  })
+}
+
+export const addHomeImages = async (homeId, images, token) => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    handleSupabaseError(userError)
+
+    // Verify user owns the home
+    const { data: home, error: homeError } = await supabase
+      .from('homes')
+      .select('owner_id')
+      .eq('id', homeId)
+      .single()
+
+    handleSupabaseError(homeError)
+
+    if (home.owner_id !== user.id) {
+      throw new Error('You can only add images to your own homes.')
+    }
+
+    // Get current primary image
+    const { data: currentImages } = await supabase
+      .from('home_images')
+      .select('is_primary')
+      .eq('home_id', homeId)
+      .eq('is_primary', true)
+
+    const hasPrimary = currentImages && currentImages.length > 0
+
+    // Add new images
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i]
+      const imageUrl = image.file ? (await uploadHouseImage(image.file, token)).url : image.url
+
+      await supabase
+        .from('home_images')
+        .insert({
+          home_id,
+          image_url: imageUrl,
+          is_primary: !hasPrimary && i === 0, // First image is primary if none exists
+          order_index: i,
+        })
+    }
+
+    return { success: true }
+  } catch (error) {
+    // If home_images table doesn't exist, skip and return success
+    if (error.message && error.message.includes('does not exist')) {
+      console.log('home_images table not yet created, skipping multiple images')
+      return { success: true }
+    }
+    throw error
+  }
+}
+
+export const deleteHomeImage = async (imageId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  // Get the image to check home ownership
+  const { data: image, error: imageError } = await supabase
+    .from('home_images')
+    .select('home_id')
+    .eq('id', imageId)
+    .single()
+
+  handleSupabaseError(imageError)
+
+  // Verify user owns the home
+  const { data: home, error: homeError } = await supabase
+    .from('homes')
+    .select('owner_id')
+    .eq('id', image.home_id)
+    .single()
+
+  handleSupabaseError(homeError)
+
+  if (home.owner_id !== user.id) {
+    throw new Error('You can only delete images from your own homes.')
+  }
+
+  // Delete the image
+  const { error } = await supabase
+    .from('home_images')
+    .delete()
+    .eq('id', imageId)
+
+  handleSupabaseError(error)
+
+  return { success: true }
+}
+
+export const setPrimaryImage = async (imageId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  // Get the image to check home ownership
+  const { data: image, error: imageError } = await supabase
+    .from('home_images')
+    .select('home_id')
+    .eq('id', imageId)
+    .single()
+
+  handleSupabaseError(imageError)
+
+  // Verify user owns the home
+  const { data: home, error: homeError } = await supabase
+    .from('homes')
+    .select('owner_id')
+    .eq('id', image.home_id)
+    .single()
+
+  handleSupabaseError(homeError)
+
+  if (home.owner_id !== user.id) {
+    throw new Error('You can only set primary image for your own homes.')
+  }
+
+  // Set all images for this home to non-primary
+  await supabase
+    .from('home_images')
+    .update({ is_primary: false })
+    .eq('home_id', image.home_id)
+
+  // Set the selected image as primary
+  const { error } = await supabase
+    .from('home_images')
+    .update({ is_primary: true })
+    .eq('id', imageId)
+
+  handleSupabaseError(error)
+
+  return { success: true }
 }
 
 export const fetchManagedHomes = async (token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  const { data, error } = await supabase
+  const { data: homesData, error: homesError } = await supabase
     .from('homes')
     .select('*')
     .eq('owner_id', user.id)
     .order('created_at', { ascending: false })
 
-  handleSupabaseError(error)
+  handleSupabaseError(homesError)
+
+  // Get all home IDs
+  const homeIds = homesData ? homesData.map(h => h.id) : []
+
+  // Try to fetch images for all homes (gracefully fail if table doesn't exist yet)
+  let imagesByHome = {}
+  try {
+    const { data: imagesData, error: imagesError } = await supabase
+      .from('home_images')
+      .select('*')
+      .in('home_id', homeIds.length > 0 ? homeIds : [])
+      .order('order_index', { ascending: true })
+
+    // Only handle error if it's not a "relation does not exist" error
+    if (imagesError && !imagesError.message.includes('does not exist')) {
+      handleSupabaseError(imagesError)
+    }
+
+    // Group images by home_id, normalising image_url → url so the gallery
+    // renderer always reads img.url regardless of how images were stored.
+    if (imagesData) {
+      imagesData.forEach(img => {
+        if (!imagesByHome[img.home_id]) {
+          imagesByHome[img.home_id] = []
+        }
+        imagesByHome[img.home_id].push({
+          ...img,
+          url: img.image_url || img.url || '',
+        })
+      })
+    }
+  } catch (error) {
+    // If home_images table doesn't exist yet, we'll use the single image fallback
+    console.log('home_images table not yet created, using single image fallback')
+  }
 
   // Ensure data is an array before mapping
-  if (!data || !Array.isArray(data)) {
+  if (!homesData || !Array.isArray(homesData)) {
     return []
   }
 
-  return data.map((home) => ({
-    ...home,
-    parking: Boolean(home.parking),
-    available: Boolean(home.available),
-    agent_id: home.owner_id,
-  }))
+  return homesData.map((home) => {
+    const imgs = imagesByHome[home.id] || [{ url: home.image, is_primary: true, order_index: 0 }]
+    const primaryImage = imgs.find(i => i.is_primary) || imgs[0]
+    const cardImage = home.image || primaryImage?.url || ''
+    return {
+      ...home,
+      parking: Boolean(home.parking),
+      available: Boolean(home.available),
+      agent_id: home.owner_id,
+      image: cardImage,
+      images: imgs,
+    }
+  })
 }
 
-export const createHome = async (home, token) => {
+export const createHome = async (home, images = [], token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
+  // Destructure only the known DB columns — omit frontend-only fields like customRegion
+  const { name, location, region, type, price, deposit, image, tag, details } = home
   const { data, error } = await supabase
     .from('homes')
     .insert({
-      ...home,
+      name,
+      location,
+      region,
+      type,
+      price,
+      deposit,
+      image,
+      tag,
+      details,
       owner_id: user.id,
       parking: home.parking ? 1 : 0,
     })
@@ -360,6 +596,23 @@ export const createHome = async (home, token) => {
     .single()
 
   handleSupabaseError(error)
+
+  // Handle multiple images
+  if (images && images.length > 0) {
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i]
+      const imageUrl = image.file ? (await uploadHouseImage(image.file, token)).url : image.url
+      
+      await supabase
+        .from('home_images')
+        .insert({
+          home_id: data.id,
+          image_url: imageUrl,
+          is_primary: i === 0, // First image is primary
+          order_index: i,
+        })
+    }
+  }
 
   return {
     ...data,
@@ -716,6 +969,10 @@ export const fetchSuperAdminOverview = async (token) => {
     throw new Error('SuperAdmin access is required.')
   }
 
+  // Pass the token explicitly so RLS sees the correct uid even if the
+  // client-side session hasn't been restored yet (e.g. after a page refresh).
+  const auth = { Authorization: `Bearer ${token}` }
+
   const [
     { count: users },
     { count: tenants },
@@ -726,14 +983,14 @@ export const fetchSuperAdminOverview = async (token) => {
     { count: pendingApplications },
     { count: payments },
   ] = await Promise.all([
-    supabase.from('profiles').select('*', { count: 'exact', head: true }),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'Tenant'),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'Agent'),
-    supabase.from('homes').select('*', { count: 'exact', head: true }),
-    supabase.from('homes').select('*', { count: 'exact', head: true }).eq('available', true),
-    supabase.from('applications').select('*', { count: 'exact', head: true }),
-    supabase.from('applications').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
-    supabase.from('applications').select('*', { count: 'exact', head: true }).in('payment_status', ['pending', 'paid']),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'Tenant').setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'Agent').setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('homes').select('*', { count: 'exact', head: true }).setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('homes').select('*', { count: 'exact', head: true }).eq('available', true).setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('applications').select('*', { count: 'exact', head: true }).setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('applications').select('*', { count: 'exact', head: true }).eq('status', 'submitted').setHeader('Authorization', `Bearer ${token}`),
+    supabase.from('applications').select('*', { count: 'exact', head: true }).in('payment_status', ['pending', 'paid']).setHeader('Authorization', `Bearer ${token}`),
   ])
 
   return {
@@ -768,6 +1025,7 @@ export const fetchSuperAdminUsers = async (token) => {
     .from('profiles')
     .select('id, name, identifier, role, phone, company, created_at')
     .order('created_at', { ascending: false })
+    .setHeader('Authorization', `Bearer ${token}`)
 
   handleSupabaseError(error)
 
@@ -865,6 +1123,39 @@ export const deleteSuperAdminUser = async (id, token) => {
   handleSupabaseError(error)
 
   return { ok: true }
+}
+
+export const fetchSuperAdminApplications = async (token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  handleSupabaseError(profileError)
+
+  if (profile.role !== 'SuperAdmin') {
+    throw new Error('SuperAdmin access is required.')
+  }
+
+  // Query with explicit Authorization header so RLS sees the correct uid
+  // regardless of whether the client-side session has been restored yet.
+  const { data, error } = await supabase
+    .from('applications')
+    .select(`
+      *,
+      homes (name, location),
+      profiles!applications_tenant_id_fkey (name, phone)
+    `)
+    .order('created_at', { ascending: false })
+    .setHeader('Authorization', `Bearer ${token}`)
+
+  handleSupabaseError(error)
+
+  return data || []
 }
 
 // Legacy booking functions (kept for compatibility)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf } from './supabaseApi'
+import { supabase } from './supabaseClient'
+import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage } from './supabaseApi'
 import { downloadContractPDF } from './generateContract'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
@@ -40,6 +41,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [form, setForm] = useState({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '', customRegion: '' })
   const [imageFile, setImageFile] = useState(null)
+  const [imageFiles, setImageFiles] = useState([])
   const [contractFiles, setContractFiles] = useState({})
   const [paybillFiles, setPaybillFiles] = useState({})
   const [homeSearch, setHomeSearch] = useState('')
@@ -115,17 +117,32 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const submitHome = async (event) => {
     event.preventDefault()
     try {
+      const sessionToken = (await supabase.auth.getSession()).data.session?.access_token
+      if (!sessionToken) throw new Error('Authentication required')
+
       let imageUrl = form.image
-      if (imageFile) imageUrl = (await uploadHouseImage(imageFile, token)).url
-      if (!imageUrl) throw new Error('Add an image URL or choose a house image file.')
-      
+      if (imageFile) imageUrl = (await uploadHouseImage(imageFile, sessionToken)).url
+      if (!imageUrl && imageFiles.length === 0) throw new Error('Add an image URL or choose at least one house image file.')
+
       // Use custom region if "Other" is selected
       const region = form.region === 'Other' ? form.customRegion : form.region
       if (!region) throw new Error('Please enter a region name.')
-      
-      await createHome({ ...form, region, image: imageUrl }, token)
+
+      // Prepare images array
+      const images = []
+      if (imageFile) {
+        images.push({ file: imageFile, is_primary: true })
+      }
+      if (imageFiles.length > 0) {
+        imageFiles.forEach((file, index) => {
+          images.push({ file, is_primary: index === 0 && !imageFile })
+        })
+      }
+
+      await createHome({ ...form, region, image: imageUrl || '' }, images, sessionToken)
       setForm({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '', customRegion: '' })
       setImageFile(null)
+      setImageFiles([])
       setShowForm(false)
       await loadData()
       onNotify('New vacant home published.')
@@ -383,7 +400,24 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             <label>Monthly rent (KES)<input required type="number" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} placeholder="85000" /></label>
             <label>Deposit (KES)<input required type="number" value={form.deposit} onChange={(event) => setForm({ ...form, deposit: event.target.value })} placeholder="170000" /></label>
             <label>Image URL<input value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} placeholder="https://example.com/image.jpg" /></label>
-            <label>Or upload image<input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0])} /></label>
+            <label>Or upload primary image<input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0])} /></label>
+            <label className="wide-field">Additional images (optional)<input type="file" accept="image/*" multiple onChange={(event) => setImageFiles(Array.from(event.target.files || []))} /></label>
+            {imageFiles.length > 0 && (
+              <div className="image-preview" style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+                {imageFiles.map((file, index) => (
+                  <div key={index} style={{ position: 'relative', width: '80px', height: '80px' }}>
+                    <img src={URL.createObjectURL(file)} alt={`Preview ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                    <button
+                      type="button"
+                      onClick={() => setImageFiles(imageFiles.filter((_, i) => i !== index))}
+                      style={{ position: 'absolute', top: '-5px', right: '-5px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <label>Tag<input value={form.tag} onChange={(event) => setForm({ ...form, tag: event.target.value })} placeholder="e.g. Just listed" /></label>
             <label className="wide-field">Details<textarea value={form.details} onChange={(event) => setForm({ ...form, details: event.target.value })} placeholder="Describe the home..." /></label>
             <label><input type="checkbox" checked={form.parking} onChange={(event) => setForm({ ...form, parking: event.target.checked })} /> Parking available</label>

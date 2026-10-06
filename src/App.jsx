@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminUser, fetchAgentProfile, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, resetPassword, submitApplication, updatePassword, updateProfile } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminUser, fetchAgentProfile, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, resetPassword, submitApplication, updatePassword, updateProfile } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -221,6 +221,7 @@ function App() {
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState([2])
   const [selectedHome, setSelectedHome] = useState(null)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [booked, setBooked] = useState([])
   const [toast, setToast] = useState('')
   const [homes, setHomes] = useState(initialHomes)
@@ -240,6 +241,7 @@ function App() {
   const handleBack = useCallback(() => {
     if (selectedHome) {
       setSelectedHome(null)
+      setCurrentImageIndex(0)
       return true
     }
     if (paymentApplication) {
@@ -260,7 +262,7 @@ function App() {
       return true
     }
     return false
-  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, showTenantProfile])
+  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, showTenantProfile, currentImageIndex])
 
   // Manage browser history so hardware back buttons on Android WebView / browsers step back instead of exiting
   useEffect(() => {
@@ -323,8 +325,34 @@ function App() {
     } catch { /* storage may be unavailable in private mode */ }
   }, [authUser])
 
+  // Keep authUser.token in sync whenever Supabase silently refreshes the JWT
+  // (tokens expire after ~1 hour; without this the stored token goes stale and
+  // every API call fails with "invalid JWT: token is expired").
+  // We only react to TOKEN_REFRESHED — not SIGNED_IN — so that logging in on
+  // another tab (which also fires onAuthStateChange via the shared event bus)
+  // does not overwrite this tab's session. Each tab uses sessionStorage as its
+  // Supabase storage adapter, so sessions are already isolated at the storage
+  // level; this listener is purely to catch background token refreshes.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED' && session?.access_token) {
+        setAuthUser((current) => current ? { ...current, token: session.access_token, refreshToken: session.refresh_token } : current)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
   useEffect(() => {
     if (!authUser?.token) return
+    // Restore the Supabase session so auth.uid() works for RLS policies.
+    // When the app rehydrates from sessionStorage, the Supabase client has no
+    // active session — setSession() re-establishes it so all DB queries work.
+    if (authUser.refreshToken) {
+      supabase.auth.setSession({
+        access_token: authUser.token,
+        refresh_token: authUser.refreshToken,
+      }).catch(() => {})
+    }
     // Validate the restored token once on load. If the server was restarted its
     // in-memory sessions are gone, so we clear the stale session cleanly.
     fetchProfile(authUser.token)
@@ -357,6 +385,7 @@ function App() {
   const confirmBooking = async () => {
     if (!authUser) {
       setSelectedHome(null)
+      setCurrentImageIndex(0)
       setShowAuthScreen(true)
       return
     }
@@ -367,6 +396,7 @@ function App() {
       setBooked((current) => [...new Set([...current, selectedHome.id])])
       showToast(`Application sent to ${selectedHome.agent_name || 'the house agent'}`)
       setSelectedHome(null)
+      setCurrentImageIndex(0)
     } catch (error) {
       showToast(error.message)
     }
@@ -397,7 +427,7 @@ function App() {
   const login = async (credentials) => {
     try {
       const result = await loginUser(credentials)
-      setAuthUser({ ...result.user, token: result.token })
+      setAuthUser({ ...result.user, token: result.token, refreshToken: result.refreshToken })
       setRole(result.user.role)
       setShowAuthScreen(false)
       return { ok: true }
@@ -564,15 +594,56 @@ function App() {
       )}
 
       {selectedHome && (
-        <div className="modal-backdrop" onClick={() => setSelectedHome(null)}>
+        <div className="modal-backdrop" onClick={() => { setSelectedHome(null); setCurrentImageIndex(0) }}>
           <div className="booking-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-top-bar">
-              <button className="in-app-back-button" onClick={() => setSelectedHome(null)}>
+              <button className="in-app-back-button" onClick={() => { setSelectedHome(null); setCurrentImageIndex(0) }}>
                 ← Back
               </button>
-              <button className="close-button" onClick={() => setSelectedHome(null)}>×</button>
+              <button className="close-button" onClick={() => { setSelectedHome(null); setCurrentImageIndex(0) }}>×</button>
             </div>
-            <img className="modal-home-image" src={selectedHome.image} alt={`${selectedHome.name} interior`} />
+            {/* Image Gallery */}
+            <div className="image-gallery-container">
+              <img 
+                className="modal-home-image" 
+                src={selectedHome.images && selectedHome.images.length > 0 
+                  ? (selectedHome.images[currentImageIndex]?.url || selectedHome.images[0]?.url)
+                  : selectedHome.image} 
+                alt={`${selectedHome.name} interior`} 
+              />
+              {/* Image Navigation */}
+              {selectedHome.images && selectedHome.images.length > 1 && (
+                <>
+                  <button 
+                    className="gallery-nav-btn gallery-prev-btn"
+                    onClick={() => setCurrentImageIndex((prev) => prev === 0 ? selectedHome.images.length - 1 : prev - 1)}
+                  >
+                    ‹
+                  </button>
+                  <button 
+                    className="gallery-nav-btn gallery-next-btn"
+                    onClick={() => setCurrentImageIndex((prev) => (prev + 1) % selectedHome.images.length)}
+                  >
+                    ›
+                  </button>
+                  {/* Thumbnails */}
+                  <div className="gallery-thumbnails">
+                    {selectedHome.images.map((img, index) => (
+                      <img
+                        key={index}
+                        src={img.url}
+                        alt={`Thumbnail ${index + 1}`}
+                        className={`gallery-thumbnail ${index === currentImageIndex ? 'active' : ''}`}
+                        onClick={() => setCurrentImageIndex(index)}
+                      />
+                    ))}
+                  </div>
+                  <div className="gallery-counter">
+                    {currentImageIndex + 1} / {selectedHome.images.length}
+                  </div>
+                </>
+              )}
+            </div>
             <div className="modal-content">
               <p className="eyebrow">{selectedHome.location}</p>
               <h2>{selectedHome.name}</h2>
@@ -951,12 +1022,8 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
       setHomes(allHomes)
       
       // Fetch all applications (admin can see all)
-      const { data: allApps } = await supabase.from('applications').select(`
-        *,
-        homes (name, location),
-        profiles!applications_tenant_id_fkey (name, phone)
-      `).order('created_at', { ascending: false })
-      setApplications(allApps || [])
+      const allApps = await fetchSuperAdminApplications(token)
+      setApplications(allApps)
     } catch (error) {
       onNotify(error.message)
     } finally {
