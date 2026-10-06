@@ -483,39 +483,6 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         </div>
       )}
 
-      {showTenantProfile && tenantProfile && (
-        <div className="listing-form profile-form" style={{ padding: '24px' }}>
-          <div className="form-header-bar">
-            <h2>Tenant Profile</h2>
-            <button type="button" className="in-app-back-button" onClick={() => { setShowTenantProfile(false); setTenantProfile(null); setSelectedTenant(null) }}>← Back to dashboard</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
-            <div className="avatar" style={{ width: '80px', height: '80px', fontSize: '32px' }}>{tenantProfile.initials}</div>
-            <div>
-              <h3 style={{ margin: '0 0 4px 0' }}>{tenantProfile.name}</h3>
-              <p style={{ margin: '0', color: '#666' }}>{tenantProfile.role} · Joined {new Date(tenantProfile.created_at).toLocaleDateString()}</p>
-            </div>
-          </div>
-          <div className="form-grid">
-            <label>Email/Phone<input disabled value={tenantProfile.identifier} /></label>
-            <label>Phone number<input disabled value={tenantProfile.phone || 'Not provided'} /></label>
-            <label>National ID<input disabled value={tenantProfile.national_id || 'Not provided'} /></label>
-            <label>Occupation<input disabled value={tenantProfile.occupation || 'Not provided'} /></label>
-            <label className="wide-field">About<textarea disabled value={tenantProfile.bio || 'No bio provided'} style={{ minHeight: '100px' }} /></label>
-          </div>
-          {tenantProfile.phone && (
-            <div className="agent-contact-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
-              <a href={`tel:${cleanPhoneNumber(tenantProfile.phone)}`} className="contact-btn call-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '6px' }}>
-                <span>📞</span> Call Tenant
-              </a>
-              <a href={getWhatsAppUrl(tenantProfile.phone)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#25D366', color: 'white', textDecoration: 'none', borderRadius: '6px' }}>
-                <span>💬</span> WhatsApp
-              </a>
-            </div>
-          )}
-        </div>
-      )}
-
       {showForm && (
         <form className="listing-form" onSubmit={submitHome}>
           <div className="form-header-bar">
@@ -695,7 +662,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         </div>
       )}
 
-      {internalView === 'applications' && !showForm && !showProfile && (
+      {internalView === 'applications' && !showForm && !showProfile && !selectedApplication && (
         <div className="table-panel">
           <div className="table-title">
             <h2>Applications</h2>
