@@ -201,7 +201,7 @@ export const fetchTenantProfile = async (tenantId, token) => {
     .single()
 
   handleSupabaseError(profileError)
-Whe
+
   return {
     id: profile.id,
     name: profile.name,
