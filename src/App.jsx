@@ -236,6 +236,7 @@ function App() {
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
   const [showAgentProfile, setShowAgentProfile] = useState(false)
   const [selectedAgentProfile, setSelectedAgentProfile] = useState(null)
+  const [openFaqIndex, setOpenFaqIndex] = useState(null)
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -594,7 +595,7 @@ function App() {
       )}
 
       {selectedHome && (
-        <div className="modal-backdrop" onClick={() => { setSelectedHome(null); setCurrentImageIndex(0) }}>
+        <div className="modal-backdrop" onClick={() => { setSelectedHome(null); setCurrentImageIndex(0); setOpenFaqIndex(null) }}>
           <div className="booking-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-top-bar">
               <button className="in-app-back-button" onClick={() => { setSelectedHome(null); setCurrentImageIndex(0) }}>
@@ -648,6 +649,21 @@ function App() {
               <p className="eyebrow">{selectedHome.location}</p>
               <h2>{selectedHome.name}</h2>
               <p>{selectedHome.details} Submit an application and the agent will review it before you make any deposit payment.</p>
+              {/* FAQ Accordion */}
+              {selectedHome.faqs && selectedHome.faqs.length > 0 && (
+                <div className="faq-section">
+                  <h4>Frequently asked questions</h4>
+                  {selectedHome.faqs.map((faq, index) => (
+                    <div key={faq.id || index} className="faq-item">
+                      <button className="faq-question" onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}>
+                        {faq.question}
+                        <span className={`faq-chevron ${openFaqIndex === index ? 'open' : ''}`}>▼</span>
+                      </button>
+                      {openFaqIndex === index && <div className="faq-answer">{faq.answer}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="agent-profile">
                 <div className="avatar">{(selectedHome.agent_name || 'Agent').slice(0, 2).toUpperCase()}</div>
                 <div style={{ flex: 1 }}>

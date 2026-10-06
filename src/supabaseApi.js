@@ -201,7 +201,7 @@ export const fetchTenantProfile = async (tenantId, token) => {
     .single()
 
   handleSupabaseError(profileError)
-
+Whe
   return {
     id: profile.id,
     name: profile.name,
@@ -297,6 +297,22 @@ export const fetchHomes = async (filters = {}) => {
   // Get all home IDs
   const homeIds = homesData.map(h => h.id)
 
+  // Fetch FAQs for all homes (gracefully fail if table doesn't exist yet)
+  let faqsByHome = {}
+  try {
+    const { data: faqsData } = await supabase
+      .from('home_faqs')
+      .select('*')
+      .in('home_id', homeIds.length > 0 ? homeIds : [])
+      .order('order_index', { ascending: true })
+    if (faqsData) {
+      faqsData.forEach(faq => {
+        if (!faqsByHome[faq.home_id]) faqsByHome[faq.home_id] = []
+        faqsByHome[faq.home_id].push(faq)
+      })
+    }
+  } catch { /* FAQ table not yet created, skip */ }
+
   // Try to fetch images for all homes (gracefully fail if table doesn't exist yet)
   let imagesByHome = {}
   try {
@@ -367,6 +383,7 @@ export const fetchHomes = async (filters = {}) => {
       agent_company: home.profiles?.company || '',
       image: cardImage,
       images: imgs,
+      faqs: faqsByHome[home.id] || [],
     }
   })
 }
@@ -786,22 +803,28 @@ export const fetchAgentApplications = async (token) => {
     return []
   }
 
-  return data.map((app) => ({
-    ...app,
-    tenant_id: app.tenant_id,
-    tenant_name: app.profiles?.name || '',
-    tenant_identifier: app.profiles?.identifier || '',
-    tenant_phone: app.profiles?.phone || '',
-    tenant_national_id: app.profiles?.national_id || '',
-    tenant_occupation: app.profiles?.occupation || '',
-    tenant_bio: app.profiles?.bio || '',
-    name: app.homes?.name || '',
-    location: app.homes?.location || '',
-    region: app.homes?.region || '',
-    type: app.homes?.type || '',
-    deposit: app.homes?.deposit || 0,
-    image: app.homes?.image || '',
-  }))
+  return data.map((app) => {
+    const identifier = app.profiles?.identifier || ''
+    // tenant_email: if identifier looks like an email use it, else empty
+    const tenant_email = identifier.includes('@') ? identifier : ''
+    return {
+      ...app,
+      tenant_id: app.tenant_id,
+      tenant_name: app.profiles?.name || '',
+      tenant_identifier: identifier,
+      tenant_email,
+      tenant_phone: app.profiles?.phone || '',
+      tenant_national_id: app.profiles?.national_id || '',
+      tenant_occupation: app.profiles?.occupation || '',
+      tenant_bio: app.profiles?.bio || '',
+      name: app.homes?.name || '',
+      location: app.homes?.location || '',
+      region: app.homes?.region || '',
+      type: app.homes?.type || '',
+      deposit: app.homes?.deposit || 0,
+      image: app.homes?.image || '',
+    }
+  })
 }
 
 export const reviewApplication = async (id, review, token) => {
@@ -814,11 +837,7 @@ export const reviewApplication = async (id, review, token) => {
     throw new Error('Application status must be approved or declined.')
   }
 
-  // Only require PDFs for approved applications
-  if (status === 'approved' && (!contractPdfUrl || !paybillPdfUrl)) {
-    throw new Error('Upload both the contract PDF and paybill PDF before approving.')
-  }
-
+  // PDFs are optional — contract is now sent via email
   const updateData = {
     status,
     reviewed_at: new Date().toISOString(),
@@ -1122,6 +1141,50 @@ export const deleteSuperAdminUser = async (id, token) => {
   const { error } = await supabase.auth.admin.deleteUser(id)
   handleSupabaseError(error)
 
+  return { ok: true }
+}
+
+// FAQ functions
+export const fetchHomeFaqs = async (homeId) => {
+  const { data, error } = await supabase
+    .from('home_faqs')
+    .select('*')
+    .eq('home_id', homeId)
+    .order('order_index', { ascending: true })
+  if (error && error.message.includes('does not exist')) return []
+  handleSupabaseError(error)
+  return data || []
+}
+
+export const createFaq = async (homeId, question, answer, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { data: countData } = await supabase.from('home_faqs').select('id', { count: 'exact', head: true }).eq('home_id', homeId)
+  const { data, error } = await supabase
+    .from('home_faqs')
+    .insert({ home_id: homeId, question: question.trim(), answer: answer.trim(), order_index: countData || 0 })
+    .select().single()
+  handleSupabaseError(error)
+  return data
+}
+
+export const updateFaq = async (faqId, question, answer, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { data, error } = await supabase
+    .from('home_faqs')
+    .update({ question: question.trim(), answer: answer.trim() })
+    .eq('id', faqId)
+    .select().single()
+  handleSupabaseError(error)
+  return data
+}
+
+export const deleteFaq = async (faqId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { error } = await supabase.from('home_faqs').delete().eq('id', faqId)
+  handleSupabaseError(error)
   return { ok: true }
 }
 

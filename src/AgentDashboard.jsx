@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage } from './supabaseApi'
-import { downloadContractPDF } from './generateContract'
+import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq } from './supabaseApi'
+import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
 
@@ -53,6 +53,10 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [selectedHome, setSelectedHome] = useState(null)
   const [internalView, setInternalView] = useState(view) // 'homes' or 'applications'
   const [showContractForm, setShowContractForm] = useState(false)
+  const [selectedApplication, setSelectedApplication] = useState(null) // full-page application detail
+  const [homeFaqs, setHomeFaqs] = useState({}) // { [homeId]: [{id, question, answer}] }
+  const [faqForm, setFaqForm] = useState({ homeId: null, editId: null, question: '', answer: '' })
+  const [showFaqForm, setShowFaqForm] = useState(false)
   const [contractForm, setContractForm] = useState({
     tenantName: '',
     tenantId: '',
@@ -198,15 +202,100 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
     } catch (error) { onNotify(error.message) }
   }
 
-  const viewTenantProfile = async (tenantId) => {
+  const viewApplicationDetail = async (application) => {
     try {
-      const profile = await fetchTenantProfile(tenantId, token)
-      setTenantProfile(profile)
-      setSelectedTenant(tenantId)
-      setShowTenantProfile(true)
+      const tenantProf = await fetchTenantProfile(application.tenant_id, token)
+      setTenantProfile(tenantProf)
+      setSelectedTenant(application.tenant_id)
+      setSelectedApplication(application)
     } catch (error) {
       onNotify(error.message)
     }
+  }
+
+  const closeApplicationDetail = () => {
+    setSelectedApplication(null)
+    setTenantProfile(null)
+    setSelectedTenant(null)
+  }
+
+  const sendContractByEmail = (application) => {
+    const home = homes.find(h => h.id === application.home_id)
+    const contractData = {
+      agentName: profile.name,
+      agentAddress: profile.company || 'N/A',
+      agentPhone: profile.phone || 'N/A',
+      agentEmail: profile.identifier || 'N/A',
+      tenantName: application.tenant_name || 'N/A',
+      tenantId: application.tenant_national_id || 'N/A',
+      tenantPhone: application.tenant_phone || 'N/A',
+      tenantEmail: application.tenant_email || 'N/A',
+      tenantAddress: 'N/A',
+      propertyName: home?.name || 'N/A',
+      propertyAddress: home?.location || 'N/A',
+      propertyType: home?.type || 'N/A',
+      bedrooms: parseInt(home?.type) || 1,
+      parking: home?.parking || false,
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      months: 12,
+      rent: home?.price || 0,
+      deposit: home?.deposit || 0,
+      paybill: contractForm.paybill || 'N/A',
+      bankAccount: contractForm.bankAccount || 'N/A',
+      utilities: contractForm.utilities,
+      petsAllowed: contractForm.petsAllowed,
+      petsDetails: contractForm.petsDetails,
+      parkingIncluded: contractForm.parkingIncluded,
+      parkingDetails: contractForm.parkingDetails,
+    }
+    // Download the PDF first
+    downloadContractPDF(contractData, `${(home?.name || 'contract').replace(/\s+/g, '_')}_contract.pdf`)
+    // Open mailto with instructions to attach the downloaded PDF
+    const email = application.tenant_email
+    const subject = encodeURIComponent(`Rental Contract — ${home?.name || 'Your Application'}`)
+    const body = encodeURIComponent(
+      `Dear ${application.tenant_name},\n\nYour application for ${home?.name} at ${home?.location} has been approved.\n\nPlease find the attached rental contract. Kindly review, sign, and return a copy.\n\nFor any queries, contact us:\nPhone: ${profile.phone || 'N/A'}\nEmail: ${profile.identifier || 'N/A'}\n\nRegards,\n${profile.name}\n${profile.company || 'Habitat Agent'}`
+    )
+    if (email) {
+      window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank')
+      onNotify('Contract PDF downloaded. Email draft opened — attach the PDF and send.')
+    } else {
+      onNotify('Contract PDF downloaded. Tenant email not available — share the PDF manually.')
+    }
+  }
+
+  const loadFaqsForHome = async (homeId) => {
+    try {
+      const faqs = await fetchHomeFaqs(homeId)
+      setHomeFaqs(prev => ({ ...prev, [homeId]: faqs }))
+    } catch { /* graceful fail */ }
+  }
+
+  const saveFaq = async () => {
+    if (!faqForm.question.trim() || !faqForm.answer.trim()) {
+      onNotify('Please fill in both question and answer.')
+      return
+    }
+    try {
+      if (faqForm.editId) {
+        await updateFaq(faqForm.editId, faqForm.question, faqForm.answer, token)
+      } else {
+        await createFaq(faqForm.homeId, faqForm.question, faqForm.answer, token)
+      }
+      await loadFaqsForHome(faqForm.homeId)
+      setFaqForm({ homeId: null, editId: null, question: '', answer: '' })
+      setShowFaqForm(false)
+      onNotify(faqForm.editId ? 'FAQ updated.' : 'FAQ added.')
+    } catch (error) { onNotify(error.message) }
+  }
+
+  const removeFaq = async (homeId, faqId) => {
+    try {
+      await deleteFaq(faqId, token)
+      await loadFaqsForHome(homeId)
+      onNotify('FAQ removed.')
+    } catch (error) { onNotify(error.message) }
   }
 
   const generateContract = (application, home) => {
@@ -333,6 +422,65 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
           </div>
           <button className="primary-action form-submit" type="submit">Save profile <span>→</span></button>
         </form>
+      )}
+
+      {/* Full-page application detail view */}
+      {selectedApplication && tenantProfile && (
+        <div className="app-detail-page">
+          <div className="app-detail-header">
+            <h2>Application Detail</h2>
+            <button type="button" className="in-app-back-button" onClick={closeApplicationDetail}>← Back to applications</button>
+          </div>
+
+          <div className="app-detail-grid">
+            {/* Tenant info card */}
+            <div className="app-detail-card">
+              <h3>Tenant</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+                <div className="avatar" style={{ width: '56px', height: '56px', fontSize: '22px', flexShrink: 0 }}>{tenantProfile.initials}</div>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '14px' }}>{tenantProfile.name}</div>
+                  <div style={{ color: '#7f9585', fontSize: '11px', marginTop: '3px' }}>Joined {new Date(tenantProfile.created_at).toLocaleDateString()}</div>
+                </div>
+              </div>
+              <div className="app-detail-field"><span>Email / Login</span><strong>{tenantProfile.identifier}</strong></div>
+              <div className="app-detail-field"><span>Phone</span><strong>{tenantProfile.phone || '—'}</strong></div>
+              <div className="app-detail-field"><span>National ID</span><strong>{tenantProfile.national_id || '—'}</strong></div>
+              <div className="app-detail-field"><span>Occupation</span><strong>{tenantProfile.occupation || '—'}</strong></div>
+              {tenantProfile.bio && <div className="app-detail-field"><span>About</span><strong style={{ fontWeight: 400, lineHeight: 1.5, display: 'block' }}>{tenantProfile.bio}</strong></div>}
+            </div>
+
+            {/* Application / home info card */}
+            <div className="app-detail-card">
+              <h3>Application</h3>
+              <div className="app-detail-field"><span>Status</span><strong><span className={`app-status-badge ${selectedApplication.status}`}>{selectedApplication.status}</span></strong></div>
+              <div className="app-detail-field"><span>Home</span><strong>{selectedApplication.name}</strong></div>
+              <div className="app-detail-field"><span>Location</span><strong>{selectedApplication.location}</strong></div>
+              <div className="app-detail-field"><span>Region</span><strong>{selectedApplication.region}</strong></div>
+              <div className="app-detail-field"><span>Category</span><strong>{selectedApplication.type}</strong></div>
+              <div className="app-detail-field"><span>Deposit</span><strong>{formatKes(selectedApplication.deposit)}</strong></div>
+              <div className="app-detail-field"><span>Applied on</span><strong>{new Date(selectedApplication.created_at).toLocaleDateString()}</strong></div>
+              {selectedApplication.tenant_message && <div className="app-detail-field"><span>Tenant message</span><strong style={{ fontWeight: 400, lineHeight: 1.5, display: 'block' }}>{selectedApplication.tenant_message}</strong></div>}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="app-detail-actions">
+            {tenantProfile.phone && (
+              <>
+                <a href={`tel:${cleanPhoneNumber(tenantProfile.phone)}`} className="app-action-call">📞 Call</a>
+                <a href={getWhatsAppUrl(tenantProfile.phone, selectedApplication.name)} target="_blank" rel="noopener noreferrer" className="app-action-whatsapp">💬 WhatsApp</a>
+              </>
+            )}
+            {selectedApplication.status === 'submitted' && (
+              <>
+                <button className="app-action-approve" onClick={async () => { await review(selectedApplication, 'approved'); closeApplicationDetail() }}>✓ Approve</button>
+                <button className="app-action-decline" onClick={async () => { await review(selectedApplication, 'declined'); closeApplicationDetail() }}>✕ Decline</button>
+              </>
+            )}
+            <button className="app-action-contract" onClick={() => sendContractByEmail(selectedApplication)}>📄 Send Contract</button>
+          </div>
+        </div>
       )}
 
       {showTenantProfile && tenantProfile && (
@@ -510,12 +658,20 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       <td>{formatKes(home.price)}/mo</td>
                       <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: home.available ? '#10b981' : '#ef4444', color: 'white' }}>{home.available ? 'Available' : 'Taken'}</span></td>
                       <td>
-                        <button 
-                          onClick={() => toggleAvailability(home)}
-                          style={{ padding: '6px 12px', fontSize: '12px', background: home.available ? '#ef4444' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                        >
-                          {home.available ? 'Mark taken' : 'Mark available'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedHome(home); loadFaqsForHome(home.id) }}
+                            style={{ padding: '6px 12px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                          >
+                            View / FAQ
+                          </button>
+                          <button 
+                            onClick={() => toggleAvailability(home)}
+                            style={{ padding: '6px 12px', fontSize: '12px', background: home.available ? '#ef4444' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                          >
+                            {home.available ? 'Mark taken' : 'Mark available'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -625,20 +781,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white' }}>{application.status}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <button onClick={() => viewTenantProfile(application.tenant_id)} style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View</button>
-                          {application.tenant_phone && (
-                            <>
-                              <a href={`tel:${cleanPhoneNumber(application.tenant_phone)}`} style={{ padding: '6px 12px', fontSize: '12px', background: '#25D366', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', textDecoration: 'none' }}>Call</a>
-                              <a href={getWhatsAppUrl(application.tenant_phone, application.name)} target="_blank" rel="noopener noreferrer" style={{ padding: '6px 12px', fontSize: '12px', background: '#25D366', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', textDecoration: 'none' }}>WhatsApp</a>
-                            </>
-                          )}
-                          {application.status === 'submitted' && (
-                            <>
-                              <button onClick={() => review(application, 'approved')} style={{ padding: '6px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Approve</button>
-                              <button onClick={() => review(application, 'declined')} style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Decline</button>
-                              <button onClick={() => generateContract(application, homes.find(h => h.id === application.home_id))} style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Contract</button>
-                            </>
-                          )}
+                          <button onClick={() => viewApplicationDetail(application)} style={{ padding: '6px 14px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View →</button>
                         </div>
                       </td>
                     </tr>
@@ -668,7 +811,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
           background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 1000
-        }} onClick={() => setSelectedHome(null)}>
+        }} onClick={() => { setSelectedHome(null); setShowFaqForm(false) }}>
           <div style={{ 
             background: 'white', borderRadius: '12px', maxWidth: '600px', width: '90%',
             maxHeight: '80vh', overflowY: 'auto'
@@ -691,6 +834,39 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 <div><strong>Status:</strong> {selectedHome.available ? 'Available' : 'Taken'}</div>
               </div>
               <p style={{ margin: '0 0 16px 0', color: '#666' }}>{selectedHome.details}</p>
+              {/* FAQ management */}
+              <div className="faq-crud-wrap">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <strong style={{ fontSize: '12px', color: '#3c5e4f' }}>FAQs for this home</strong>
+                  <button
+                    onClick={() => { loadFaqsForHome(selectedHome.id); setFaqForm({ homeId: selectedHome.id, editId: null, question: '', answer: '' }); setShowFaqForm(true) }}
+                    style={{ fontSize: '11px', background: '#173d36', color: '#fff', border: 'none', borderRadius: '5px', padding: '6px 12px', cursor: 'pointer' }}
+                  >+ Add FAQ</button>
+                </div>
+                {(homeFaqs[selectedHome.id] || []).map(faq => (
+                  <div key={faq.id} className="faq-crud-item">
+                    <div className="faq-crud-texts">
+                      <div className="faq-crud-q">{faq.question}</div>
+                      <div className="faq-crud-a">{faq.answer}</div>
+                    </div>
+                    <div className="faq-crud-btns">
+                      <button className="faq-edit-btn" onClick={() => { setFaqForm({ homeId: selectedHome.id, editId: faq.id, question: faq.question, answer: faq.answer }); setShowFaqForm(true) }}>Edit</button>
+                      <button className="faq-delete-btn" onClick={() => removeFaq(selectedHome.id, faq.id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+                {(homeFaqs[selectedHome.id] || []).length === 0 && <p style={{ fontSize: '11px', color: '#9ca3af', margin: '4px 0 0' }}>No FAQs yet. Add common tenant questions.</p>}
+                {showFaqForm && faqForm.homeId === selectedHome.id && (
+                  <div className="faq-add-form">
+                    <input placeholder="Question e.g. Is there water supply?" value={faqForm.question} onChange={e => setFaqForm({ ...faqForm, question: e.target.value })} />
+                    <textarea placeholder="Answer e.g. Yes, water is available 24/7 via borehole." value={faqForm.answer} onChange={e => setFaqForm({ ...faqForm, answer: e.target.value })} />
+                    <div className="faq-add-form-actions">
+                      <button className="faq-save-btn" onClick={saveFaq}>{faqForm.editId ? 'Update FAQ' : 'Save FAQ'}</button>
+                      <button className="faq-cancel-btn" onClick={() => { setShowFaqForm(false); setFaqForm({ homeId: null, editId: null, question: '', answer: '' }) }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button 
                 onClick={() => { toggleAvailability(selectedHome); setSelectedHome(null) }}
                 style={{ 
