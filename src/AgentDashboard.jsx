@@ -59,6 +59,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [showFaqForm, setShowFaqForm] = useState(false)
   const [contractConfirm, setContractConfirm] = useState(null) // application to confirm sending
   const [paymentAlerts, setPaymentAlerts] = useState([]) // applications past 72h deadline unpaid
+  const [approveConfirm, setApproveConfirm] = useState(null) // { application, otherApplicants[] }
   const [contractForm, setContractForm] = useState({
     tenantName: '',
     tenantId: '',
@@ -196,24 +197,32 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   }
 
   const review = async (application, status) => {
-    const approved = status === 'approved'
+    if (status === 'approved') {
+      // Find other applicants for the same home before approving
+      const sameHomeApps = applications.filter(
+        a => a.home_id === application.home_id &&
+          a.id !== application.id &&
+          a.status === 'submitted'
+      )
+      // Show the confirm-approve modal with the list of other applicants
+      setApproveConfirm({ application, otherApplicants: sameHomeApps })
+      return
+    }
+    // Decline goes straight through
+    await executeReview(application, 'declined')
+  }
+
+  const executeReview = async (application, status) => {
     try {
-      let contractPdfUrl = ''
-      let paybillPdfUrl = ''
-      if (approved) {
-        if (contractFiles[application.id] && paybillFiles[application.id]) {
-          contractPdfUrl = (await uploadPdf(contractFiles[application.id], token)).url
-          paybillPdfUrl = (await uploadPdf(paybillFiles[application.id], token)).url
-        }
-      }
-      await reviewApplication(application.id, { status, contractText: '', paybill: '', contractPdfUrl, paybillPdfUrl }, token)
+      const result = await reviewApplication(application.id, { status, contractText: '', paybill: '', contractPdfUrl: '', paybillPdfUrl: '' }, token)
       await loadData()
       onNotify(`Application ${status}.`)
 
-      // Send status notification email to tenant if they have an email
+      const home = homes.find(h => h.id === application.home_id)
+
+      // Send notification to the reviewed tenant
       const tenantEmail = application.tenant_email || application.tenant_identifier
       if (tenantEmail && tenantEmail.includes('@')) {
-        const home = homes.find(h => h.id === application.home_id)
         try {
           await sendStatusNotificationEmail({
             tenantEmail,
@@ -225,10 +234,27 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             propertyAddress: home?.location || application.location || '',
             status,
           }, token)
-          onNotify(`Application ${status}. Notification sent to ${tenantEmail}.`)
-        } catch {
-          // Don't block the approval if email fails — the status is already updated
-          onNotify(`Application ${status}. (Email notification could not be sent.)`)
+        } catch { /* email failure does not block the action */ }
+      }
+
+      // If approved, also send decline emails to all auto-declined applicants
+      if (status === 'approved' && result.declinedApplicants?.length > 0) {
+        onNotify(`Application approved. ${result.declinedApplicants.length} other applicant${result.declinedApplicants.length > 1 ? 's' : ''} automatically declined.`)
+        for (const declined of result.declinedApplicants) {
+          if (declined.tenant_email && declined.tenant_email.includes('@')) {
+            try {
+              await sendStatusNotificationEmail({
+                tenantEmail: declined.tenant_email,
+                tenantName: declined.tenant_name,
+                agentName: profile.name,
+                agentEmail: profile.identifier || '',
+                agentPhone: profile.phone || '',
+                propertyName: home?.name || application.name || '',
+                propertyAddress: home?.location || application.location || '',
+                status: 'declined',
+              }, token)
+            } catch { /* email failure does not block */ }
+          }
         }
       }
     } catch (error) { onNotify(error.message) }
@@ -578,7 +604,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             )}
             {selectedApplication.status === 'submitted' && (
               <>
-                <button className="app-action-approve" onClick={async () => { await review(selectedApplication, 'approved'); closeApplicationDetail() }}>✓ Approve</button>
+                <button className="app-action-approve" onClick={() => review(selectedApplication, 'approved')}>✓ Approve</button>
                 <button className="app-action-decline" onClick={async () => { await review(selectedApplication, 'declined'); closeApplicationDetail() }}>✕ Decline</button>
               </>
             )}
@@ -1152,6 +1178,61 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   padding: '12px 24px', borderRadius: '8px',
                   background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px'
                 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve confirmation modal — shows other applicants, confirms auto-decline */}
+      {approveConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,34,28,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={() => setApproveConfirm(null)}>
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '500px', width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 8px', color: '#173d36', font: '400 22px Georgia,serif' }}>Confirm Approval</h3>
+            <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 20px' }}>
+              You are approving <strong>{approveConfirm.application.tenant_name}</strong> for <strong>{approveConfirm.application.name || 'this home'}</strong>.
+            </p>
+
+            {approveConfirm.otherApplicants.length > 0 ? (
+              <>
+                <div style={{ background: '#fff8ed', border: '1px solid #f59e0b', borderRadius: '7px', padding: '12px 16px', marginBottom: '20px' }}>
+                  <strong style={{ fontSize: '12px', color: '#92400e' }}>
+                    ⚠ {approveConfirm.otherApplicants.length} other applicant{approveConfirm.otherApplicants.length > 1 ? 's' : ''} will be automatically declined and notified by email:
+                  </strong>
+                  <ul style={{ margin: '10px 0 0', padding: '0 0 0 18px' }}>
+                    {approveConfirm.otherApplicants.map(a => (
+                      <li key={a.id} style={{ fontSize: '12px', color: '#78350f', marginBottom: '4px' }}>
+                        {a.tenant_name} {a.tenant_email ? <span style={{ color: '#9ca3af' }}>— {a.tenant_email}</span> : <span style={{ color: '#9ca3af' }}>— no email</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            ) : (
+              <p style={{ fontSize: '12px', color: '#718078', background: '#f6f9f5', padding: '12px 16px', borderRadius: '7px', marginBottom: '20px' }}>
+                No other applicants for this home.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={async () => {
+                  const app = approveConfirm.application
+                  setApproveConfirm(null)
+                  await executeReview(app, 'approved')
+                  closeApplicationDetail()
+                }}
+                style={{ flex: 1, padding: '13px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                ✓ Confirm Approval
+              </button>
+              <button
+                onClick={() => setApproveConfirm(null)}
+                style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

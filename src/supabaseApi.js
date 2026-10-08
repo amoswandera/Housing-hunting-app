@@ -902,14 +902,46 @@ export const reviewApplication = async (id, review, token) => {
   handleSupabaseError(error)
 
   // When approved, automatically mark the home as taken
+  // and auto-decline all other submitted applications for the same home
+  let declinedApplicants = []
   if (status === 'approved') {
     await supabase
       .from('homes')
       .update({ available: false })
       .eq('id', data.home_id)
+
+    // Fetch all other submitted applications for this home (to notify them)
+    const { data: others } = await supabase
+      .from('applications')
+      .select(`
+        id,
+        tenant_id,
+        profiles!applications_tenant_id_fkey (name, identifier)
+      `)
+      .eq('home_id', data.home_id)
+      .eq('status', 'submitted')
+      .neq('id', id)
+
+    if (others && others.length > 0) {
+      // Auto-decline all of them
+      await supabase
+        .from('applications')
+        .update({ status: 'declined', reviewed_at: new Date().toISOString() })
+        .eq('home_id', data.home_id)
+        .eq('status', 'submitted')
+        .neq('id', id)
+
+      // Return their details so the caller can send notification emails
+      declinedApplicants = others.map(o => ({
+        id: o.id,
+        tenant_id: o.tenant_id,
+        tenant_name: o.profiles?.name || 'Tenant',
+        tenant_email: (o.profiles?.identifier || '').includes('@') ? o.profiles.identifier : '',
+      }))
+    }
   }
 
-  return { status: data.status, home_id: data.home_id, tenant_id: data.tenant_id }
+  return { status: data.status, home_id: data.home_id, tenant_id: data.tenant_id, declinedApplicants }
 }
 
 export const requestPayment = async (id, phone, amount, token) => {
@@ -1171,7 +1203,7 @@ export const deleteSuperAdminUser = async (id, token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  if (Number(id) === user.id) {
+  if (id === user.id) {
     throw new Error('You cannot remove your own super-admin account.')
   }
 
@@ -1185,6 +1217,18 @@ export const deleteSuperAdminUser = async (id, token) => {
 
   if (profile.role !== 'SuperAdmin') {
     throw new Error('SuperAdmin access is required.')
+  }
+
+  // Protect tenants who have paid deposits — cannot be deleted until refunded
+  const { data: paidApplications } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('tenant_id', id)
+    .eq('payment_status', 'paid')
+    .limit(1)
+
+  if (paidApplications && paidApplications.length > 0) {
+    throw new Error('Cannot delete this tenant — they have an active paid deposit. The deposit must be refunded before this account can be removed.')
   }
 
   const { error } = await supabase.auth.admin.deleteUser(id)
