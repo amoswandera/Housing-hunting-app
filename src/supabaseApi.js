@@ -277,7 +277,7 @@ export const updateProfile = async (profile, token) => {
 }
 
 // Homes functions — fetch all homes (SuperAdmin sees all, others see available only)
-export const fetchHomes = async (filters = {}, adminMode = false) => {
+export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds = []) => {
   // First fetch homes with their images
   let query = supabase
     .from('homes')
@@ -292,8 +292,13 @@ export const fetchHomes = async (filters = {}, adminMode = false) => {
     `)
 
   // SuperAdmin sees all homes; everyone else sees only available ones
+  // Exception: if the tenant has an approved home, include it even if unavailable
   if (!adminMode) {
-    query = query.eq('available', true)
+    if (includeHomeIds.length > 0) {
+      query = query.or(`available.eq.true,id.in.(${includeHomeIds.join(',')})`)
+    } else {
+      query = query.eq('available', true)
+    }
   }
 
   const { data: homesData, error: homesError } = await query
@@ -1384,15 +1389,15 @@ export const relistHome = async (homeId, token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  // Agent can relist their own home; SuperAdmin can relist any home
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
 
-  const query = supabase.from('homes').update({ available: true }).eq('id', homeId)
+  // Agent can only relist their own home; SuperAdmin can relist any
+  let updateQuery = supabase.from('homes').update({ available: true }).eq('id', homeId)
   if (profile?.role !== 'SuperAdmin') {
-    query.eq('owner_id', user.id)
+    updateQuery = updateQuery.eq('owner_id', user.id)
   }
 
-  const { data, error } = await query.select().single()
+  const { error } = await updateQuery
   handleSupabaseError(error)
   return { ok: true }
 }

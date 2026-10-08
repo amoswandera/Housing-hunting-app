@@ -317,6 +317,11 @@ function App() {
     fetchMyApplications(authUser.token).then((items) => {
       setApplications(items)
       setBooked(items.filter((item) => ['submitted', 'approved'].includes(item.status)).map((item) => item.home_id))
+      // Re-fetch homes including any approved home so the tenant can still view it
+      const approvedHomeIds = items
+        .filter(a => a.status === 'approved' && a.home_id)
+        .map(a => a.home_id)
+      fetchHomes({}, false, approvedHomeIds).then(setHomes).catch(() => {})
     }).catch(() => {})
   }, [authUser])
 
