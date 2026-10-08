@@ -239,6 +239,7 @@ function App() {
   const [openFaqIndex, setOpenFaqIndex] = useState(null)
   const [applyConfirm, setApplyConfirm] = useState(null) // home to confirm application for
   const [priceRange, setPriceRange] = useState('All prices')
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('All')
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -573,7 +574,88 @@ function App() {
           {activeView === 'bookings' && !showTenantProfile && <>
           <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
           <div className="content-heading"><div><h2>My bookings</h2><p>Applications are reviewed by each house agent.</p></div></div>
-          {applications.length > 0 ? <section className="application-list">{applications.map((application) => <div className="application-row" key={application.id}><div><strong>{application.name}</strong><span>{application.location}</span></div><span className={`application-status ${application.status}`}>{application.status}</span>{application.agent_phone && <div className="application-agent-contact"><div><strong>Agent: {application.agent_name || 'House Agent'}</strong><span>{application.agent_phone} {application.agent_company ? `· ${application.agent_company}` : ''}</span></div><div className="agent-contact-actions"><a href={`tel:${cleanPhoneNumber(application.agent_phone)}`} className="contact-btn call-btn mini" title="Call Agent"><span>📞</span> Call</a><a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a></div></div>}{application.status === 'approved' && <div className="contract-box"><strong>Approved</strong><span>{application.contract_pdf_url ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer">View contract PDF ↗</a> : 'Contract PDF pending'}</span><small>{application.paybill_pdf_url ? <a href={application.paybill_pdf_url} target="_blank" rel="noreferrer">View paybill PDF ↗</a> : 'Paybill PDF pending'}</small>{application.payment_status !== 'paid' && <button onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>Make payment</button>}{application.payment_status === 'pending' && <small>Payment prompt sent to {application.payment_phone}.</small>}{application.payment_status === 'paid' && <small>Deposit payment recorded.</small>}</div>}{application.status === 'submitted' && <button onClick={() => cancelBooking(application.home_id)}>Cancel application</button>}</div>)}</section> : <div className="empty-state"><strong>No bookings yet</strong><span>Apply for a home and it will appear here.</span></div>}
+          <div className="table-panel" style={{ marginTop: '0' }}>
+            <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+              <select
+                className="role-filter"
+                value={bookingStatusFilter}
+                onChange={(e) => setBookingStatusFilter(e.target.value)}
+                aria-label="Filter by status"
+                style={{ minWidth: '160px' }}
+              >
+                <option value="All">All statuses</option>
+                <option value="submitted">Submitted</option>
+                <option value="approved">Approved</option>
+                <option value="declined">Declined</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="refunded">Refunded</option>
+              </select>
+              <span style={{ fontSize: '11px', color: '#7f9585', marginLeft: '8px' }}>
+                {applications.filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter).length} application{applications.filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter).length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            {applications.length > 0 ? (
+              <div className="users-table-wrap">
+                <table className="users-table applications-table">
+                  <thead>
+                    <tr>
+                      <th>Home</th>
+                      <th>Location</th>
+                      <th>Status</th>
+                      <th>Agent</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {applications
+                      .filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter)
+                      .map((application) => (
+                      <tr key={application.id}>
+                        <td><strong>{application.name}</strong><br /><span style={{ fontSize: '10px', color: '#7f9585' }}>{application.location}</span></td>
+                        <td>{application.location}</td>
+                        <td><span className={`application-status ${application.status}`}>{application.status}</span></td>
+                        <td>
+                          {application.agent_phone ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2d443b' }}>{application.agent_name || 'House Agent'}</span>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <a href={`tel:${cleanPhoneNumber(application.agent_phone)}`} className="contact-btn call-btn mini" title="Call Agent"><span>📞</span> Call</a>
+                                <a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a>
+                              </div>
+                            </div>
+                          ) : '—'}
+                        </td>
+                        <td>
+                          {application.status === 'approved' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {application.contract_pdf_url
+                                ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
+                                : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
+                              {application.payment_status !== 'paid' && (
+                                <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                  onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
+                                  Make payment
+                                </button>
+                              )}
+                              {application.payment_status === 'paid' && <span style={{ fontSize: '10px', color: '#568666', fontWeight: 700 }}>✓ Deposit paid</span>}
+                            </div>
+                          )}
+                          {application.status === 'submitted' && (
+                            <button style={{ border: 0, background: 'none', color: '#c97861', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer' }}
+                              onClick={() => cancelBooking(application.home_id)}>
+                              Cancel
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="empty-state"><strong>No bookings yet</strong><span>Apply for a home and it will appear here.</span></div>
+            )}
+          </div>
           </>}
         </>}
 
@@ -1487,27 +1569,89 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
           {selectedView === 'payments' && (
             <div className="table-panel">
               <div className="table-title">
-                <h2>Payments</h2>
-                <span>{applications.filter(a => a.payment_status === 'paid').length} paid</span>
+                <h2>Deposit Payments</h2>
+                <span>{applications.filter(a => ['pending', 'paid'].includes(a.payment_status)).length} record{applications.filter(a => ['pending', 'paid'].includes(a.payment_status)).length !== 1 ? 's' : ''}</span>
               </div>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {applications.filter(a => ['pending', 'paid'].includes(a.payment_status)).map((app) => (
-                  <div key={app.id} style={{ 
-                    background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px',
-                    display: 'flex', gap: '16px', alignItems: 'center'
-                  }}>
-                    <div className="avatar">{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                    <div style={{ flex: 1 }}>
-                      <strong>{app.profiles?.name || 'Tenant'}</strong>
-                      <span>{app.homes?.name}</span>
-                      <small>{formatKes(app.payment_amount || 0)} via {app.payment_phone}</small>
-                    </div>
-                    <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: app.payment_status === 'paid' ? '#10b981' : '#f59e0b', color: 'white' }}>
-                      {app.payment_status}
-                    </span>
-                  </div>
-                ))}
+              <div className="users-toolbar">
+                <div className="search-field admin-user-search">
+                  <span>⌕</span>
+                  <input
+                    value={applicationSearch}
+                    onChange={(event) => setApplicationSearch(event.target.value)}
+                    placeholder="Search by tenant name or home"
+                  />
+                </div>
+                <select
+                  className="role-filter"
+                  value={applicationRegionFilter}
+                  onChange={(event) => setApplicationRegionFilter(event.target.value)}
+                  aria-label="Filter by payment status"
+                >
+                  <option value="All regions">All payment statuses</option>
+                  <option value="__pending">Pending</option>
+                  <option value="__paid">Paid</option>
+                </select>
               </div>
+              <div className="users-table-wrap">
+                <table className="users-table applications-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>Home</th>
+                      <th>Location</th>
+                      <th>Amount</th>
+                      <th>Phone</th>
+                      <th>App Status</th>
+                      <th>Payment</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {applications.filter(app => {
+                      const hasPay = ['pending', 'paid'].includes(app.payment_status)
+                      if (!hasPay) return false
+                      const search = applicationSearch.toLowerCase()
+                      const matchesSearch = !search ||
+                        (app.profiles?.name || '').toLowerCase().includes(search) ||
+                        (app.homes?.name || '').toLowerCase().includes(search) ||
+                        (app.homes?.location || '').toLowerCase().includes(search)
+                      const matchesStatus =
+                        applicationRegionFilter === 'All regions' ||
+                        (applicationRegionFilter === '__pending' && app.payment_status === 'pending') ||
+                        (applicationRegionFilter === '__paid' && app.payment_status === 'paid')
+                      return matchesSearch && matchesStatus
+                    }).map((app) => (
+                      <tr key={app.id}>
+                        <td>
+                          <div className="users-table-name">
+                            <div className="avatar">{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                            <strong>{app.profiles?.name || 'Tenant'}</strong>
+                          </div>
+                        </td>
+                        <td>{app.homes?.name || '—'}</td>
+                        <td>{app.homes?.location || '—'}</td>
+                        <td><strong>{formatKes(app.payment_amount || 0)}</strong></td>
+                        <td>{app.payment_phone || '—'}</td>
+                        <td>
+                          <span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: getStatusColor(app.status), color: 'white' }}>
+                            {app.status}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: app.payment_status === 'paid' ? '#10b981' : '#f59e0b', color: 'white' }}>
+                            {app.payment_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!loading && applications.filter(a => ['pending', 'paid'].includes(a.payment_status)).length === 0 && (
+                <div className="empty-state">
+                  <strong>No payment records yet</strong>
+                  <span>Deposit payments will appear here once tenants initiate payment.</span>
+                </div>
+              )}
             </div>
           )}
         </div>
