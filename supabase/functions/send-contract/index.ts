@@ -127,7 +127,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Habitat <contracts@habitat-app.co.ke>',
+        from: 'Habitat <onboarding@resend.dev>',
         to: [tenantEmail],
         subject: `Your Rental Contract — ${propertyName}`,
         html,
