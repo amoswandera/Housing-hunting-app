@@ -1303,7 +1303,7 @@ export const fetchSuperAdminApplications = async (token) => {
     .from('applications')
     .select(`
       *,
-      homes (name, location),
+      homes (name, location, region, type, deposit),
       profiles!applications_tenant_id_fkey (name, phone)
     `)
     .order('created_at', { ascending: false })
