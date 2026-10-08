@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
@@ -191,7 +191,6 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       let contractPdfUrl = ''
       let paybillPdfUrl = ''
       if (approved) {
-        // Allow approval without PDFs - agent can generate contract later
         if (contractFiles[application.id] && paybillFiles[application.id]) {
           contractPdfUrl = (await uploadPdf(contractFiles[application.id], token)).url
           paybillPdfUrl = (await uploadPdf(paybillFiles[application.id], token)).url
@@ -200,6 +199,28 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       await reviewApplication(application.id, { status, contractText: '', paybill: '', contractPdfUrl, paybillPdfUrl }, token)
       await loadData()
       onNotify(`Application ${status}.`)
+
+      // Send status notification email to tenant if they have an email
+      const tenantEmail = application.tenant_email || application.tenant_identifier
+      if (tenantEmail && tenantEmail.includes('@')) {
+        const home = homes.find(h => h.id === application.home_id)
+        try {
+          await sendStatusNotificationEmail({
+            tenantEmail,
+            tenantName: application.tenant_name || 'Tenant',
+            agentName: profile.name,
+            agentEmail: profile.identifier || '',
+            agentPhone: profile.phone || '',
+            propertyName: home?.name || application.name || '',
+            propertyAddress: home?.location || application.location || '',
+            status,
+          }, token)
+          onNotify(`Application ${status}. Notification sent to ${tenantEmail}.`)
+        } catch {
+          // Don't block the approval if email fails — the status is already updated
+          onNotify(`Application ${status}. (Email notification could not be sent.)`)
+        }
+      }
     } catch (error) { onNotify(error.message) }
   }
 

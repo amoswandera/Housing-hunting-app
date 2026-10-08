@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminUser, fetchAgentProfile, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, resetPassword, submitApplication, updatePassword, updateProfile } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, resetPassword, sendStatusNotificationEmail, submitApplication, updatePassword, updateProfile } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -237,6 +237,8 @@ function App() {
   const [showAgentProfile, setShowAgentProfile] = useState(false)
   const [selectedAgentProfile, setSelectedAgentProfile] = useState(null)
   const [openFaqIndex, setOpenFaqIndex] = useState(null)
+  const [applyConfirm, setApplyConfirm] = useState(null) // home to confirm application for
+  const [priceRange, setPriceRange] = useState('All prices')
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -371,8 +373,15 @@ function App() {
     const matchesRegion = region === 'All regions' || home.region === region
     const matchesCategory = category === 'All categories' || home.type === category
     const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
-    return matchesRegion && matchesCategory && searchable.includes(query.toLowerCase())
-  }), [category, homes, query, region])
+    const matchesQuery = searchable.includes(query.toLowerCase())
+    let matchesPrice = true
+    if (priceRange === 'Under 30k') matchesPrice = home.price < 30000
+    else if (priceRange === '30k–60k') matchesPrice = home.price >= 30000 && home.price <= 60000
+    else if (priceRange === '60k–100k') matchesPrice = home.price > 60000 && home.price <= 100000
+    else if (priceRange === '100k–200k') matchesPrice = home.price > 100000 && home.price <= 200000
+    else if (priceRange === 'Over 200k') matchesPrice = home.price > 200000
+    return matchesRegion && matchesCategory && matchesQuery && matchesPrice
+  }), [category, homes, query, region, priceRange])
 
   const showToast = useCallback((message) => {
     setToast(message)
@@ -383,21 +392,28 @@ function App() {
     setSaved((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   }
 
-  const confirmBooking = async () => {
+  const confirmBooking = () => {
     if (!authUser) {
       setSelectedHome(null)
       setCurrentImageIndex(0)
       setShowAuthScreen(true)
       return
     }
+    // Show confirmation modal before submitting
+    setApplyConfirm(selectedHome)
+  }
+
+  const submitBooking = async () => {
+    const home = applyConfirm
+    setApplyConfirm(null)
+    setSelectedHome(null)
+    setCurrentImageIndex(0)
     try {
-      await submitApplication(selectedHome.id, 'I would like to apply for this home.', authUser.token)
+      await submitApplication(home.id, 'I would like to apply for this home.', authUser.token)
       const updatedApplications = await fetchMyApplications(authUser.token)
       setApplications(updatedApplications)
-      setBooked((current) => [...new Set([...current, selectedHome.id])])
-      showToast(`Application sent to ${selectedHome.agent_name || 'the house agent'}`)
-      setSelectedHome(null)
-      setCurrentImageIndex(0)
+      setBooked((current) => [...new Set([...current, home.id])])
+      showToast(`Application sent to ${home.agent_name || 'the house agent'}`)
     } catch (error) {
       showToast(error.message)
     }
@@ -544,7 +560,7 @@ function App() {
           )}
           {activeView === 'discover' && !showTenantProfile && <>
           <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
-          <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => setRegion(event.target.value)}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
+          <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => setRegion(event.target.value)}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => setPriceRange(event.target.value)}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
           <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available homes, updated today</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
           <section className="home-grid">{filteredHomes.map(renderHomeCard)}</section>
           {filteredHomes.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
@@ -704,6 +720,30 @@ function App() {
               </div>
               <button className="primary-action" onClick={confirmBooking}>Send application <span>→</span></button>
               <small>No payment is taken now. The agent will send a contract and paybill after approval.</small>
+            </div>
+          </div>
+        </div>
+      )}
+      {applyConfirm && (
+        <div className="modal-backdrop" onClick={() => setApplyConfirm(null)}>
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '420px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 10px', color: '#173d36', font: '400 22px Georgia,serif' }}>Send Application</h3>
+            <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 20px' }}>
+              Are you sure you want to apply for:
+            </p>
+            <div style={{ background: '#f6f9f5', borderRadius: '7px', padding: '14px 18px', marginBottom: '24px' }}>
+              <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '14px' }}>{applyConfirm.name}</div>
+              <div style={{ color: '#718078', fontSize: '12px', marginTop: '4px' }}>{applyConfirm.location} · {formatKes(applyConfirm.price)}/mo</div>
+              <div style={{ color: '#3e735e', fontSize: '12px', marginTop: '2px' }}>Agent: {applyConfirm.agent_name || 'House agent'}</div>
+            </div>
+            <small style={{ display: 'block', color: '#9aa49e', fontSize: '11px', marginBottom: '20px', textAlign: 'center' }}>No payment is taken now. The agent reviews your application first.</small>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={submitBooking} style={{ flex: 1, padding: '13px', background: '#173d36', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                Send Application →
+              </button>
+              <button onClick={() => setApplyConfirm(null)} style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1292,6 +1332,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                       <th>Category</th>
                       <th>Rent</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1311,6 +1352,21 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                           <span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: home.available ? '#10b981' : '#ef4444', color: 'white' }}>
                             {home.available ? 'Available' : 'Taken'}
                           </span>
+                        </td>
+                        <td>
+                          <button
+                            className="remove-user"
+                            onClick={async () => {
+                              if (!window.confirm(`Permanently delete "${home.name}"? This cannot be undone.`)) return
+                              try {
+                                await deleteSuperAdminHome(home.id, token)
+                                setHomes(current => current.filter(h => h.id !== home.id))
+                                onNotify(`${home.name} was deleted.`)
+                              } catch (error) { onNotify(error.message) }
+                            }}
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}

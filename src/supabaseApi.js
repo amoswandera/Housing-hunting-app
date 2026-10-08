@@ -860,7 +860,15 @@ export const reviewApplication = async (id, review, token) => {
 
   handleSupabaseError(error)
 
-  return { status: data.status }
+  // When approved, automatically mark the home as taken
+  if (status === 'approved') {
+    await supabase
+      .from('homes')
+      .update({ available: false })
+      .eq('id', data.home_id)
+  }
+
+  return { status: data.status, home_id: data.home_id, tenant_id: data.tenant_id }
 }
 
 export const requestPayment = async (id, phone, amount, token) => {
@@ -1255,4 +1263,48 @@ export const sendContractEmail = async (contractPayload, token) => {
   const result = await res.json()
   if (!res.ok) throw new Error(result.error || 'Failed to send contract email.')
   return result
+}
+
+export const sendStatusNotificationEmail = async (payload, token) => {
+  const { data: { session } } = await supabase.auth.getSession()
+  const accessToken = session?.access_token || token
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const res = await fetch(`${supabaseUrl}/functions/v1/send-status-notification`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  const result = await res.json()
+  if (!res.ok) throw new Error(result.error || 'Failed to send notification email.')
+  return result
+}
+
+export const deleteSuperAdminHome = async (homeId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  handleSupabaseError(profileError)
+
+  if (profile.role !== 'SuperAdmin') {
+    throw new Error('SuperAdmin access is required.')
+  }
+
+  // Delete the home — cascades to applications, bookings, home_images, home_faqs
+  const { error } = await supabase
+    .from('homes')
+    .delete()
+    .eq('id', homeId)
+    .setHeader('Authorization', `Bearer ${token}`)
+
+  handleSupabaseError(error)
+  return { ok: true }
 }
