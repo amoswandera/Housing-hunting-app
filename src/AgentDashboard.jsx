@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
@@ -57,6 +57,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [homeFaqs, setHomeFaqs] = useState({}) // { [homeId]: [{id, question, answer}] }
   const [faqForm, setFaqForm] = useState({ homeId: null, editId: null, question: '', answer: '' })
   const [showFaqForm, setShowFaqForm] = useState(false)
+  const [contractConfirm, setContractConfirm] = useState(null) // application to confirm sending
   const [contractForm, setContractForm] = useState({
     tenantName: '',
     tenantId: '',
@@ -220,48 +221,38 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   }
 
   const sendContractByEmail = (application) => {
+    // Show confirmation modal instead of sending immediately
+    setContractConfirm(application)
+  }
+
+  const confirmSendContract = async () => {
+    const application = contractConfirm
+    setContractConfirm(null)
     const home = homes.find(h => h.id === application.home_id)
-    const contractData = {
-      agentName: profile.name,
-      agentAddress: profile.company || 'N/A',
-      agentPhone: profile.phone || 'N/A',
-      agentEmail: profile.identifier || 'N/A',
-      tenantName: application.tenant_name || 'N/A',
-      tenantId: application.tenant_national_id || 'N/A',
-      tenantPhone: application.tenant_phone || 'N/A',
-      tenantEmail: application.tenant_email || 'N/A',
-      tenantAddress: 'N/A',
-      propertyName: home?.name || 'N/A',
-      propertyAddress: home?.location || 'N/A',
-      propertyType: home?.type || 'N/A',
-      bedrooms: parseInt(home?.type) || 1,
-      parking: home?.parking || false,
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      months: 12,
-      rent: home?.price || 0,
-      deposit: home?.deposit || 0,
-      paybill: contractForm.paybill || 'N/A',
-      bankAccount: contractForm.bankAccount || 'N/A',
-      utilities: contractForm.utilities,
-      petsAllowed: contractForm.petsAllowed,
-      petsDetails: contractForm.petsDetails,
-      parkingIncluded: contractForm.parkingIncluded,
-      parkingDetails: contractForm.parkingDetails,
+    const tenantEmail = application.tenant_email || application.tenant_identifier
+    if (!tenantEmail || !tenantEmail.includes('@')) {
+      onNotify('Tenant has no email address on their account — cannot send contract.')
+      return
     }
-    // Download the PDF first
-    downloadContractPDF(contractData, `${(home?.name || 'contract').replace(/\s+/g, '_')}_contract.pdf`)
-    // Open mailto with instructions to attach the downloaded PDF
-    const email = application.tenant_email
-    const subject = encodeURIComponent(`Rental Contract — ${home?.name || 'Your Application'}`)
-    const body = encodeURIComponent(
-      `Dear ${application.tenant_name},\n\nYour application for ${home?.name} at ${home?.location} has been approved.\n\nPlease find the attached rental contract. Kindly review, sign, and return a copy.\n\nFor any queries, contact us:\nPhone: ${profile.phone || 'N/A'}\nEmail: ${profile.identifier || 'N/A'}\n\nRegards,\n${profile.name}\n${profile.company || 'Habitat Agent'}`
-    )
-    if (email) {
-      window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank')
-      onNotify('Contract PDF downloaded. Email draft opened — attach the PDF and send.')
-    } else {
-      onNotify('Contract PDF downloaded. Tenant email not available — share the PDF manually.')
+    try {
+      await sendContractEmail({
+        tenantEmail,
+        tenantName: application.tenant_name || 'Tenant',
+        agentName: profile.name,
+        agentEmail: profile.identifier || '',
+        agentPhone: profile.phone || '',
+        propertyName: home?.name || '',
+        propertyAddress: home?.location || '',
+        propertyType: home?.type || '',
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        rent: home?.price || 0,
+        deposit: home?.deposit || 0,
+        paybill: contractForm.paybill || '',
+      }, token)
+      onNotify(`Contract sent to ${tenantEmail}`)
+    } catch (error) {
+      onNotify(error.message)
     }
   }
 
@@ -1048,6 +1039,40 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   padding: '12px 24px', borderRadius: '8px',
                   background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px'
                 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract send confirmation modal */}
+      {contractConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,34,28,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={() => setContractConfirm(null)}>
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '420px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 10px', color: '#173d36', font: '400 22px Georgia,serif' }}>Send Contract</h3>
+            <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 20px' }}>
+              Are you sure you want to send the rental contract for <strong>{homes.find(h => h.id === contractConfirm.home_id)?.name}</strong> to:
+            </p>
+            <div style={{ background: '#f6f9f5', borderRadius: '7px', padding: '14px 18px', marginBottom: '24px' }}>
+              <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '14px' }}>{contractConfirm.tenant_name}</div>
+              <div style={{ color: '#3e735e', fontSize: '13px', marginTop: '4px' }}>
+                {contractConfirm.tenant_email || contractConfirm.tenant_identifier}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={confirmSendContract}
+                style={{ flex: 1, padding: '13px', background: '#173d36', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Send Contract →
+              </button>
+              <button
+                onClick={() => setContractConfirm(null)}
+                style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

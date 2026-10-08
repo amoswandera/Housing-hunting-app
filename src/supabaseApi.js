@@ -1236,3 +1236,23 @@ export const cancelBooking = async (id, token) => {
   // Bookings are deprecated in favor of applications
   return cancelApplication(id, token)
 }
+
+export const sendContractEmail = async (contractPayload, token) => {
+  // Call the Supabase Edge Function which emails the contract via Resend
+  const { data: { session } } = await supabase.auth.getSession()
+  const accessToken = session?.access_token || token
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const res = await fetch(`${supabaseUrl}/functions/v1/send-contract`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(contractPayload),
+  })
+
+  const result = await res.json()
+  if (!res.ok) throw new Error(result.error || 'Failed to send contract email.')
+  return result
+}
