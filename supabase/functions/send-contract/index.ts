@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { SmtpClient } from 'https://deno.land/x/smtp@v0.7.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,30 +46,26 @@ serve(async (req) => {
 
     const formatKes = (n: number) => `KES ${Number(n).toLocaleString('en-KE')}`
 
-    const html = `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
     body { font-family: Georgia, serif; color: #1d3d33; margin: 0; padding: 0; background: #f6f9f5; }
-    .wrapper { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .wrapper { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; }
     .header { background: #173d36; padding: 32px 40px; }
-    .header h1 { color: #fff; font-size: 22px; margin: 0 0 6px; font-weight: 400; letter-spacing: -0.5px; }
+    .header h1 { color: #fff; font-size: 22px; margin: 0 0 6px; font-weight: 400; }
     .header p { color: #a9c4bb; font-size: 13px; margin: 0; }
     .body { padding: 36px 40px; }
-    .greeting { font-size: 16px; margin-bottom: 20px; }
+    .note { font-size: 13px; color: #718078; line-height: 1.7; margin-bottom: 24px; }
     .section { background: #f6f9f5; border-radius: 8px; padding: 20px 24px; margin-bottom: 20px; }
     .section h3 { margin: 0 0 14px; font-size: 11px; font-weight: 700; color: #3c5e4f; text-transform: uppercase; letter-spacing: .06em; }
-    .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #e7ede8; font-size: 13px; }
-    .row:last-child { border-bottom: none; }
-    .row span { color: #7f9585; }
-    .row strong { color: #1d3d33; }
-    .note { font-size: 12px; color: #718078; line-height: 1.7; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td { padding: 7px 0; border-bottom: 1px solid #e7ede8; }
+    td:last-child { text-align: right; font-weight: 700; color: #1d3d33; }
+    tr:last-child td { border-bottom: none; }
+    .agent-sig { margin-top: 24px; padding: 16px 20px; border-left: 3px solid #173d36; background: #f6f9f5; }
     .footer { background: #f6f9f5; padding: 20px 40px; border-top: 1px solid #e7ede8; font-size: 11px; color: #9aa49e; }
-    .agent-sig { margin-top: 24px; padding: 16px 20px; border-left: 3px solid #173d36; background: #f6f9f5; border-radius: 0 6px 6px 0; }
-    .agent-sig strong { display: block; color: #1d3d33; font-size: 13px; }
-    .agent-sig span { color: #718078; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -80,54 +75,106 @@ serve(async (req) => {
       <p>Habitat Housing Marketplace</p>
     </div>
     <div class="body">
-      <p class="greeting">Dear <strong>${tenantName}</strong>,</p>
-      <p class="note">
-        Your application for <strong>${propertyName}</strong> has been reviewed by your agent.
-        Please find the details of your rental agreement below. Review everything carefully.
-        If you have any questions, contact your agent directly.
+      <p class="note">Dear <strong>${tenantName}</strong>,<br><br>
+        Your application for <strong>${propertyName}</strong> has been reviewed. 
+        Below are the details of your rental agreement. Contact your agent if you have any questions.
       </p>
-
       <div class="section">
-        <h3>Property</h3>
-        <div class="row"><span>Property</span><strong>${propertyName}</strong></div>
-        <div class="row"><span>Address</span><strong>${propertyAddress}</strong></div>
-        <div class="row"><span>Type</span><strong>${propertyType}</strong></div>
+        <h3>Property Details</h3>
+        <table>
+          <tr><td style="color:#7f9585">Property</td><td>${propertyName}</td></tr>
+          <tr><td style="color:#7f9585">Address</td><td>${propertyAddress}</td></tr>
+          <tr><td style="color:#7f9585">Type</td><td>${propertyType}</td></tr>
+        </table>
       </div>
-
       <div class="section">
         <h3>Lease Terms</h3>
-        <div class="row"><span>Start date</span><strong>${startDate}</strong></div>
-        <div class="row"><span>End date</span><strong>${endDate}</strong></div>
-        <div class="row"><span>Monthly rent</span><strong>${formatKes(rent)}</strong></div>
-        <div class="row"><span>Security deposit</span><strong>${formatKes(deposit)}</strong></div>
-        ${paybill && paybill !== 'N/A' ? `<div class="row"><span>M-Pesa Paybill</span><strong>${paybill}</strong></div>` : ''}
+        <table>
+          <tr><td style="color:#7f9585">Start date</td><td>${startDate}</td></tr>
+          <tr><td style="color:#7f9585">End date</td><td>${endDate}</td></tr>
+          <tr><td style="color:#7f9585">Monthly rent</td><td>${formatKes(rent)}</td></tr>
+          <tr><td style="color:#7f9585">Security deposit</td><td>${formatKes(deposit)}</td></tr>
+          ${paybill && paybill !== 'N/A' ? `<tr><td style="color:#7f9585">M-Pesa Paybill</td><td>${paybill}</td></tr>` : ''}
+        </table>
       </div>
-
-      <p class="note">
-        This is a summary of your contract. The full signed agreement will be provided by your agent.
-        Please do not make any payment until you have received and reviewed the complete contract document.
-      </p>
-
+      <p class="note">Please do not make any payment until you have received and signed the full contract document from your agent.</p>
       <div class="agent-sig">
-        <strong>${agentName}</strong>
-        <span>${agentEmail}${agentPhone ? ' · ' + agentPhone : ''}</span>
+        <strong style="display:block;color:#1d3d33;font-size:13px">${agentName}</strong>
+        <span style="color:#718078;font-size:12px">${agentEmail}${agentPhone ? ' · ' + agentPhone : ''}</span>
       </div>
     </div>
     <div class="footer">
-      Habitat Housing Marketplace &nbsp;·&nbsp; This email was sent on behalf of ${agentName}.
+      Habitat Housing Marketplace · Sent on behalf of ${agentName}.<br>
       If you did not apply for a home on Habitat, please disregard this email.
     </div>
   </div>
 </body>
 </html>`
 
-    const client = new SmtpClient()
+    // Build the raw email in RFC 2822 format and send via Gmail API using OAuth2-less
+    // approach: SMTP over fetch using Gmail's REST API with App Password via basic auth
+    // encoded as base64 for the Gmail API sendRaw endpoint.
 
-    await client.connectTLS({
-      hostname: 'smtp.gmail.com',
-      port: 465,
-      username: GMAIL_USER,
-      password: GMAIL_APP_PASSWORD,
+    // Encode credentials for basic auth
+    const credentials = btoa(`${GMAIL_USER}:${GMAIL_APP_PASSWORD}`)
+
+    // Build raw MIME message
+    const boundary = `boundary_${Date.now()}`
+    const rawEmail = [
+      `From: Habitat <${GMAIL_USER}>`,
+      `To: ${tenantEmail}`,
+      `Subject: Your Rental Contract — ${propertyName}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      `Dear ${tenantName},`,
+      ``,
+      `Your application for ${propertyName} at ${propertyAddress} has been reviewed.`,
+      ``,
+      `Lease Terms:`,
+      `- Start: ${startDate}`,
+      `- End: ${endDate}`,
+      `- Monthly rent: ${formatKes(rent)}`,
+      `- Security deposit: ${formatKes(deposit)}`,
+      ``,
+      `Contact: ${agentName} | ${agentEmail}${agentPhone ? ' | ' + agentPhone : ''}`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      ``,
+      html,
+      ``,
+      `--${boundary}--`,
+    ].join('\r\n')
+
+    // Base64url encode the raw email for Gmail API
+    const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+
+    // Use Gmail REST API with App Password via OAuth — but since App Password
+    // doesn't support OAuth, use the SMTP relay via fetch to smtp2go or use
+    // Supabase's built-in pg_net to call Gmail SMTP.
+    // Best approach without OAuth: use smtp4dev-compatible service.
+    // We'll use the Gmail SMTP via nodemailer-style raw TCP — use smtp library that works.
+
+    // Use deno-mailer which is compatible with current Deno
+    const { SMTPClient } = await import('https://deno.land/x/denomailer@1.6.0/mod.ts')
+
+    const client = new SMTPClient({
+      connection: {
+        hostname: 'smtp.gmail.com',
+        port: 465,
+        tls: true,
+        auth: {
+          username: GMAIL_USER,
+          password: GMAIL_APP_PASSWORD,
+        },
+      },
     })
 
     await client.send({
@@ -145,7 +192,7 @@ serve(async (req) => {
     )
 
   } catch (err) {
-    console.error('Edge function error:', err)
+    console.error('send-contract error:', err)
     return new Response(
       JSON.stringify({ error: err.message || 'Failed to send email.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
