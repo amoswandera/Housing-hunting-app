@@ -276,10 +276,10 @@ export const updateProfile = async (profile, token) => {
   }
 }
 
-// Homes functions
-export const fetchHomes = async (filters = {}) => {
+// Homes functions — fetch all homes (SuperAdmin sees all, others see available only)
+export const fetchHomes = async (filters = {}, adminMode = false) => {
   // First fetch homes with their images
-  const { data: homesData, error: homesError } = await supabase
+  let query = supabase
     .from('homes')
     .select(`
       *,
@@ -290,8 +290,13 @@ export const fetchHomes = async (filters = {}) => {
         company
       )
     `)
-    .eq('available', true)
 
+  // SuperAdmin sees all homes; everyone else sees only available ones
+  if (!adminMode) {
+    query = query.eq('available', true)
+  }
+
+  const { data: homesData, error: homesError } = await query
   handleSupabaseError(homesError)
 
   // Get all home IDs
@@ -717,10 +722,15 @@ export const fetchMyApplications = async (token) => {
     .select(`
       *,
       homes (
+        id,
         name,
         location,
+        region,
+        type,
+        price,
         deposit,
         image,
+        available,
         profiles!homes_owner_id_fkey (
           name,
           phone,
@@ -734,10 +744,7 @@ export const fetchMyApplications = async (token) => {
 
   handleSupabaseError(error)
 
-  // Ensure data is an array before mapping
-  if (!data || !Array.isArray(data)) {
-    return []
-  }
+  if (!data || !Array.isArray(data)) return []
 
   return data.map((app) => ({
     ...app,
@@ -750,6 +757,8 @@ export const fetchMyApplications = async (token) => {
     location: app.homes?.location || '',
     deposit: app.homes?.deposit || 0,
     image: app.homes?.image || '',
+    home_available: Boolean(app.homes?.available),
+    payment_deadline: app.payment_deadline || null,
   }))
 }
 
@@ -837,14 +846,41 @@ export const reviewApplication = async (id, review, token) => {
     throw new Error('Application status must be approved or declined.')
   }
 
+  if (status === 'approved') {
+    // Get the application to find the tenant
+    const { data: app } = await supabase
+      .from('applications')
+      .select('tenant_id, home_id')
+      .eq('id', id)
+      .single()
+
+    if (app) {
+      // Block if tenant already has an active approved application on another home
+      const { data: existing } = await supabase
+        .from('applications')
+        .select('id, home_id')
+        .eq('tenant_id', app.tenant_id)
+        .eq('status', 'approved')
+        .neq('id', id)
+        .maybeSingle()
+
+      if (existing) {
+        throw new Error('This tenant already has an approved application on another home. A tenant can only be approved for one home at a time.')
+      }
+    }
+  }
+
   // PDFs are optional — contract is now sent via email
   const updateData = {
     status,
     reviewed_at: new Date().toISOString(),
   }
 
-  // Only add contract and paybill data if approved
+  // On approval: set 72-hour payment deadline
   if (status === 'approved') {
+    const deadline = new Date()
+    deadline.setHours(deadline.getHours() + 72)
+    updateData.payment_deadline = deadline.toISOString()
     updateData.contract_text = contractText || ''
     updateData.paybill = paybill || ''
     updateData.contract_pdf_url = contractPdfUrl || ''
@@ -1298,6 +1334,18 @@ export const deleteSuperAdminHome = async (homeId, token) => {
     throw new Error('SuperAdmin access is required.')
   }
 
+  // Block deletion if any application for this home has been paid
+  const { data: paidApps } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('home_id', homeId)
+    .eq('payment_status', 'paid')
+    .limit(1)
+
+  if (paidApps && paidApps.length > 0) {
+    throw new Error('Cannot delete this home — a tenant has already paid a deposit. The tenant must claim a refund first before this home can be removed.')
+  }
+
   // Delete the home — cascades to applications, bookings, home_images, home_faqs
   const { error } = await supabase
     .from('homes')
@@ -1307,4 +1355,87 @@ export const deleteSuperAdminHome = async (homeId, token) => {
 
   handleSupabaseError(error)
   return { ok: true }
+}
+
+export const transferAgentHomes = async (fromAgentId, toAgentId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  handleSupabaseError(profileError)
+  if (profile.role !== 'SuperAdmin') throw new Error('SuperAdmin access is required.')
+
+  const { data, error } = await supabase
+    .from('homes')
+    .update({ owner_id: toAgentId })
+    .eq('owner_id', fromAgentId)
+    .setHeader('Authorization', `Bearer ${token}`)
+
+  handleSupabaseError(error)
+  return { ok: true }
+}
+
+export const relistHome = async (homeId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  // Agent can relist their own home; SuperAdmin can relist any home
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+
+  const query = supabase.from('homes').update({ available: true }).eq('id', homeId)
+  if (profile?.role !== 'SuperAdmin') {
+    query.eq('owner_id', user.id)
+  }
+
+  const { data, error } = await query.select().single()
+  handleSupabaseError(error)
+  return { ok: true }
+}
+
+export const returnHomeToAvailable = async (applicationId, homeId, token) => {
+  // Revert application to submitted and relist the home
+  const { error: appError } = await supabase
+    .from('applications')
+    .update({ status: 'submitted', payment_deadline: null, reviewed_at: null })
+    .eq('id', applicationId)
+  handleSupabaseError(appError)
+
+  const { error: homeError } = await supabase
+    .from('homes')
+    .update({ available: true })
+    .eq('id', homeId)
+  handleSupabaseError(homeError)
+
+  return { ok: true }
+}
+
+export const fetchAllHomesAdmin = async (token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data, error } = await supabase
+    .from('homes')
+    .select(`
+      *,
+      profiles!homes_owner_id_fkey (name, phone, company)
+    `)
+    .order('created_at', { ascending: false })
+    .setHeader('Authorization', `Bearer ${token}`)
+
+  handleSupabaseError(error)
+  return (data || []).map(home => ({
+    ...home,
+    parking: Boolean(home.parking),
+    available: Boolean(home.available),
+    agent_id: home.owner_id,
+    agent_name: home.profiles?.name || '',
+    agent_phone: home.profiles?.phone || '',
+    agent_company: home.profiles?.company || '',
+    image: home.image || '',
+  }))
 }

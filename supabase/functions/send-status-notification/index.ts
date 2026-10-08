@@ -40,11 +40,14 @@ serve(async (req) => {
     }
 
     const isApproved = status === 'approved'
-    const statusLabel = isApproved ? 'Approved ✓' : 'Declined'
-    const accentColor = isApproved ? '#10b981' : '#ef4444'
+    const isExpired = status === 'payment_expired'
+    const statusLabel = isApproved ? 'Approved ✓' : isExpired ? 'Payment Deadline Passed' : 'Declined'
+    const accentColor = isApproved ? '#10b981' : isExpired ? '#f59e0b' : '#ef4444'
     const subject = isApproved
       ? `Your application for ${propertyName} has been approved`
-      : `Update on your application for ${propertyName}`
+      : isExpired
+        ? `Your application for ${propertyName} has expired — home returned to listing`
+        : `Update on your application for ${propertyName}`
 
     const html = `<!DOCTYPE html>
 <html>
@@ -78,8 +81,10 @@ serve(async (req) => {
     <div class="status-badge">${statusLabel}</div>
     <p class="note">Dear <strong>${tenantName}</strong>,<br><br>
       ${isApproved
-        ? `Your application for <strong>${propertyName}</strong> at <strong>${propertyAddress}</strong> has been <strong>approved</strong> by the agent. Your agent will send you a rental contract shortly. Please do not make any payment until you have received and signed the contract.`
-        : `Thank you for your interest in <strong>${propertyName}</strong>. Unfortunately, your application has not been approved at this time. You are welcome to browse other available homes on Habitat.`
+        ? `Your application for <strong>${propertyName}</strong> at <strong>${propertyAddress}</strong> has been <strong>approved</strong> by the agent. Your agent will send you a rental contract shortly. Please do not make any payment until you have received and signed the contract. <strong>You must pay the security deposit within 72 hours of receiving the contract</strong>, otherwise your application will be cancelled.`
+        : isExpired
+          ? `Your application for <strong>${propertyName}</strong> at <strong>${propertyAddress}</strong> has been cancelled because the 72-hour deposit payment window has passed without a payment being received. The home has been returned to the available listings. If you are still interested, please submit a new application.`
+          : `Thank you for your interest in <strong>${propertyName}</strong>. Unfortunately, your application has not been approved at this time. You are welcome to browse other available homes on Habitat.`
       }
     </p>
     <div class="section">

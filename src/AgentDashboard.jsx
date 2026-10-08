@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
@@ -58,6 +58,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [faqForm, setFaqForm] = useState({ homeId: null, editId: null, question: '', answer: '' })
   const [showFaqForm, setShowFaqForm] = useState(false)
   const [contractConfirm, setContractConfirm] = useState(null) // application to confirm sending
+  const [paymentAlerts, setPaymentAlerts] = useState([]) // applications past 72h deadline unpaid
   const [contractForm, setContractForm] = useState({
     tenantName: '',
     tenantId: '',
@@ -91,6 +92,15 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       const [managedHomes, receivedApplications] = await Promise.all([fetchManagedHomes(token), fetchAgentApplications(token)])
       setHomes(managedHomes)
       setApplications(receivedApplications)
+      // Check for applications approved but not paid within 72 hours
+      const now = new Date()
+      const alerts = receivedApplications.filter(app =>
+        app.status === 'approved' &&
+        app.payment_status !== 'paid' &&
+        app.payment_deadline &&
+        new Date(app.payment_deadline) < now
+      )
+      setPaymentAlerts(alerts)
     } catch (error) {
       onNotify(error.message)
     }
@@ -426,6 +436,47 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
           <button onClick={() => setShowProfile((current) => !current)}>My agent profile <span>→</span></button>
         </div>
       </div>
+
+      {/* 72-hour payment deadline alerts */}
+      {paymentAlerts.map(alert => (
+        <div key={alert.id} style={{ background: '#fff8ed', border: '1px solid #f59e0b', borderRadius: '8px', padding: '14px 18px', margin: '16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <strong style={{ color: '#92400e', fontSize: '13px' }}>⏰ Payment overdue — {alert.name || 'Home'}</strong>
+            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#78350f' }}>
+              {alert.tenant_name} was approved but has not paid the deposit within 72 hours (deadline: {new Date(alert.payment_deadline).toLocaleString()}).
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Return "${alert.name}" to available listings? The application will be reverted and ${alert.tenant_name} will need to reapply.`)) return
+              try {
+                await returnHomeToAvailable(alert.id, alert.home_id, token)
+                onNotify(`${alert.name} is now available again. ${alert.tenant_name}'s application has been reverted.`)
+                // Notify tenant via email if they have one
+                const tenantEmail = alert.tenant_email || alert.tenant_identifier
+                if (tenantEmail && tenantEmail.includes('@')) {
+                  try {
+                    await sendStatusNotificationEmail({
+                      tenantEmail,
+                      tenantName: alert.tenant_name || 'Tenant',
+                      agentName: profile.name,
+                      agentEmail: profile.identifier || '',
+                      agentPhone: profile.phone || '',
+                      propertyName: alert.name || '',
+                      propertyAddress: alert.location || '',
+                      status: 'payment_expired',
+                    }, token)
+                  } catch { /* email failure should not block the action */ }
+                }
+                await loadData()
+              } catch (error) { onNotify(error.message) }
+            }}
+            style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            Return to available ↺
+          </button>
+        </div>
+      ))}
 
       {/* Internal navigation for switching views */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>

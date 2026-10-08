@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, requestPayment, resetPassword, submitApplication, updatePassword, updateProfile } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resetPassword, returnHomeToAvailable, submitApplication, transferAgentHomes, updatePassword, updateProfile } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -646,6 +646,13 @@ function App() {
                               {application.contract_pdf_url
                                 ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
                                 : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
+                              {application.payment_deadline && application.payment_status !== 'paid' && (
+                                <span style={{ fontSize: '10px', color: new Date(application.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
+                                  {new Date(application.payment_deadline) < new Date()
+                                    ? '⚠ Payment deadline passed'
+                                    : `⏰ Pay by ${new Date(application.payment_deadline).toLocaleString()}`}
+                                </span>
+                              )}
                               {application.payment_status !== 'paid' && (
                                 <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
                                   onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
@@ -1172,8 +1179,8 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       setOverview(stats)
       setUsers(people)
       
-      // Also fetch homes and applications for detailed views
-      const allHomes = await fetchHomes({})
+      // Also fetch ALL homes (available + taken) for the admin view
+      const allHomes = await fetchAllHomesAdmin(token)
       setHomes(allHomes)
       
       // Fetch all applications (admin can see all)
@@ -1222,6 +1229,26 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const removeUser = async (user) => {
     if (user.id === currentUserId) { onNotify('You cannot remove your own super-admin account.'); return }
     if (!window.confirm(`Remove ${user.name}? This permanently deletes the account.`)) return
+
+    // If deleting an agent, offer to transfer their homes first
+    if (user.role === 'Agent') {
+      const agents = users.filter(u => u.role === 'Agent' && u.id !== user.id)
+      if (agents.length > 0) {
+        const transferTo = window.prompt(
+          `${user.name} is an Agent with homes. Enter the email/identifier of the agent to transfer their homes to, or leave blank to leave homes unmanaged:\n\n` +
+          agents.map(a => a.identifier).join('\n')
+        )
+        if (transferTo && transferTo.trim()) {
+          const targetAgent = users.find(u => u.identifier === transferTo.trim())
+          if (!targetAgent) { onNotify(`No agent found with identifier: ${transferTo.trim()}`); return }
+          try {
+            await transferAgentHomes(user.id, targetAgent.id, token)
+            onNotify(`Homes transferred to ${targetAgent.name}.`)
+          } catch (error) { onNotify(error.message); return }
+        }
+      }
+    }
+
     try {
       await deleteSuperAdminUser(user.id, token)
       setUsers((current) => current.filter((item) => item.id !== user.id))
@@ -1452,6 +1479,21 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                           </span>
                         </td>
                         <td>
+                          {!home.available && (
+                            <button
+                              style={{ border: 'none', background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, cursor: 'pointer', marginRight: '12px' }}
+                              onClick={async () => {
+                                if (!window.confirm(`Re-list "${home.name}" as available for new tenants?`)) return
+                                try {
+                                  await relistHome(home.id, token)
+                                  setHomes(current => current.map(h => h.id === home.id ? { ...h, available: true } : h))
+                                  onNotify(`${home.name} is now available.`)
+                                } catch (error) { onNotify(error.message) }
+                              }}
+                            >
+                              Re-list ↺
+                            </button>
+                          )}
                           <button
                             className="remove-user"
                             onClick={async () => {

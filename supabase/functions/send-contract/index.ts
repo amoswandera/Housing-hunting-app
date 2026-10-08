@@ -107,7 +107,11 @@ serve(async (req) => {
         ${paybill && paybill !== 'N/A' ? `<tr><td>M-Pesa Paybill</td><td>${paybill}</td></tr>` : ''}
       </table>
     </div>
-    <p class="note">Please do not make any payment until you have reviewed and signed the attached contract.</p>
+    <p class="note">
+        This is a summary of your contract. The full signed agreement is attached to this email as a PDF.
+        Review it carefully, sign it, and return a copy to your agent.<br><br>
+        <strong style="color:#c0392b">⏰ Important: You must pay the security deposit of ${formatKes(deposit)} within 72 hours of receiving this contract. Failure to pay within this period will result in your application being cancelled and the home being made available to other tenants.</strong>
+      </p>
     <div class="agent-sig">
       <strong style="display:block;color:#1d3d33;font-size:13px">${agentName}</strong>
       <span style="color:#718078;font-size:12px">${agentEmail}${agentPhone ? ' · ' + agentPhone : ''}</span>
