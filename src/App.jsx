@@ -600,7 +600,6 @@ function App() {
                   <thead>
                     <tr>
                       <th>Home</th>
-                      <th>Location</th>
                       <th>Status</th>
                       <th>Agent</th>
                       <th>Actions</th>
@@ -611,8 +610,24 @@ function App() {
                       .filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter)
                       .map((application) => (
                       <tr key={application.id}>
-                        <td><strong>{application.name}</strong><br /><span style={{ fontSize: '10px', color: '#7f9585' }}>{application.location}</span></td>
-                        <td>{application.location}</td>
+                        <td>
+                          <div className="users-table-name">
+                            <div style={{
+                              width: '44px', height: '44px', borderRadius: '5px', flexShrink: 0,
+                              backgroundImage: application.image ? `url(${application.image})` : 'none',
+                              backgroundSize: 'cover', backgroundPosition: 'center',
+                              background: application.image ? undefined : '#e4ecdf',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '18px', color: '#6c9a77'
+                            }}>
+                              {!application.image && '⌂'}
+                            </div>
+                            <div>
+                              <strong>{application.name || 'Home no longer listed'}</strong>
+                              {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
+                            </div>
+                          </div>
+                        </td>
                         <td><span className={`application-status ${application.status}`}>{application.status}</span></td>
                         <td>
                           {application.agent_phone ? (
@@ -623,7 +638,7 @@ function App() {
                                 <a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a>
                               </div>
                             </div>
-                          ) : '—'}
+                          ) : <span style={{ color: '#9aa49e', fontSize: '11px' }}>—</span>}
                         </td>
                         <td>
                           {application.status === 'approved' && (
@@ -646,6 +661,7 @@ function App() {
                               Cancel
                             </button>
                           )}
+                          {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
                         </td>
                       </tr>
                     ))}
