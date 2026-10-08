@@ -235,6 +235,45 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       return
     }
     try {
+      // Build the full contract data (same as what generateContract uses)
+      const contractData = {
+        agentName: profile.name,
+        agentAddress: profile.company || 'N/A',
+        agentPhone: profile.phone || 'N/A',
+        agentEmail: profile.identifier || 'N/A',
+        tenantName: application.tenant_name || 'N/A',
+        tenantId: application.tenant_national_id || 'N/A',
+        tenantPhone: application.tenant_phone || 'N/A',
+        tenantEmail,
+        tenantAddress: 'N/A',
+        propertyName: home?.name || 'N/A',
+        propertyAddress: home?.location || 'N/A',
+        propertyType: home?.type || 'N/A',
+        bedrooms: parseInt(home?.type) || 1,
+        parking: home?.parking || false,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        months: 12,
+        rent: home?.price || 0,
+        deposit: home?.deposit || 0,
+        paybill: contractForm.paybill || 'N/A',
+        bankAccount: contractForm.bankAccount || 'N/A',
+        utilities: contractForm.utilities,
+        petsAllowed: contractForm.petsAllowed,
+        petsDetails: contractForm.petsDetails,
+        parkingIncluded: contractForm.parkingIncluded,
+        parkingDetails: contractForm.parkingDetails,
+      }
+
+      // Generate the full PDF as a blob and convert to base64
+      const pdfBlob = getContractPDFBlob(contractData)
+      const pdfBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result).split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(pdfBlob)
+      })
+
       await sendContractEmail({
         tenantEmail,
         tenantName: application.tenant_name || 'Tenant',
@@ -244,11 +283,13 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         propertyName: home?.name || '',
         propertyAddress: home?.location || '',
         propertyType: home?.type || '',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        startDate: contractData.startDate,
+        endDate: contractData.endDate,
         rent: home?.price || 0,
         deposit: home?.deposit || 0,
         paybill: contractForm.paybill || '',
+        pdfBase64,
+        pdfFileName: `${(home?.name || 'contract').replace(/\s+/g, '_')}_contract.pdf`,
       }, token)
       onNotify(`Contract sent to ${tenantEmail}`)
     } catch (error) {

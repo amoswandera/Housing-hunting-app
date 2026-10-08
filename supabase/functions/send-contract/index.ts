@@ -25,6 +25,8 @@ serve(async (req) => {
       rent,
       deposit,
       paybill,
+      pdfBase64,
+      pdfFileName,
     } = await req.json()
 
     if (!tenantEmail) {
@@ -46,123 +48,136 @@ serve(async (req) => {
 
     const formatKes = (n: number) => `KES ${Number(n).toLocaleString('en-KE')}`
 
-    const html = `<!DOCTYPE html>
+    // Build MIME email with PDF attachment
+    const boundary = `==boundary_${Date.now()}==`
+    const fileName = pdfFileName || 'rental_contract.pdf'
+
+    const htmlBody = `<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <style>
-    body { font-family: Georgia, serif; color: #1d3d33; margin: 0; padding: 0; background: #f6f9f5; }
-    .wrapper { max-width: 600px; margin: 32px auto; background: #fff; border-radius: 10px; overflow: hidden; }
-    .header { background: #173d36; padding: 32px 40px; }
-    .header h1 { color: #fff; font-size: 22px; margin: 0 0 6px; font-weight: 400; }
-    .header p { color: #a9c4bb; font-size: 13px; margin: 0; }
-    .body { padding: 36px 40px; }
-    .note { font-size: 13px; color: #718078; line-height: 1.7; margin-bottom: 24px; }
-    .section { background: #f6f9f5; border-radius: 8px; padding: 20px 24px; margin-bottom: 20px; }
-    .section h3 { margin: 0 0 14px; font-size: 11px; font-weight: 700; color: #3c5e4f; text-transform: uppercase; letter-spacing: .06em; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    td { padding: 7px 0; border-bottom: 1px solid #e7ede8; }
-    td:last-child { text-align: right; font-weight: 700; color: #1d3d33; }
-    tr:last-child td { border-bottom: none; }
-    .agent-sig { margin-top: 24px; padding: 16px 20px; border-left: 3px solid #173d36; background: #f6f9f5; }
-    .footer { background: #f6f9f5; padding: 20px 40px; border-top: 1px solid #e7ede8; font-size: 11px; color: #9aa49e; }
-  </style>
+<head><meta charset="utf-8" />
+<style>
+  body{font-family:Georgia,serif;color:#1d3d33;margin:0;padding:0;background:#f6f9f5}
+  .wrapper{max-width:600px;margin:32px auto;background:#fff;border-radius:10px;overflow:hidden}
+  .header{background:#173d36;padding:32px 40px}
+  .header h1{color:#fff;font-size:22px;margin:0 0 6px;font-weight:400}
+  .header p{color:#a9c4bb;font-size:13px;margin:0}
+  .body{padding:36px 40px}
+  .note{font-size:13px;color:#718078;line-height:1.7;margin-bottom:24px}
+  .section{background:#f6f9f5;border-radius:8px;padding:20px 24px;margin-bottom:20px}
+  .section h3{margin:0 0 14px;font-size:11px;font-weight:700;color:#3c5e4f;text-transform:uppercase;letter-spacing:.06em}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:7px 0;border-bottom:1px solid #e7ede8;color:#7f9585}
+  td:last-child{text-align:right;font-weight:700;color:#1d3d33}
+  tr:last-child td{border-bottom:none}
+  .attach-note{background:#fff8ed;border-left:3px solid #e08b2d;padding:12px 16px;border-radius:0 6px 6px 0;font-size:12px;color:#7c5a1e;margin-bottom:20px}
+  .agent-sig{margin-top:24px;padding:16px 20px;border-left:3px solid #173d36;background:#f6f9f5}
+  .footer{background:#f6f9f5;padding:20px 40px;border-top:1px solid #e7ede8;font-size:11px;color:#9aa49e}
+</style>
 </head>
 <body>
-  <div class="wrapper">
-    <div class="header">
-      <h1>Rental Contract — ${propertyName}</h1>
-      <p>Habitat Housing Marketplace</p>
+<div class="wrapper">
+  <div class="header">
+    <h1>Rental Contract — ${propertyName}</h1>
+    <p>Habitat Housing Marketplace</p>
+  </div>
+  <div class="body">
+    <p class="note">Dear <strong>${tenantName}</strong>,<br><br>
+      Your rental contract for <strong>${propertyName}</strong> is ready.
+      The full signed contract PDF is attached to this email. Please review it carefully,
+      sign it, and return a copy to your agent.
+    </p>
+    <div class="attach-note">
+      📎 <strong>${fileName}</strong> is attached to this email.
     </div>
-    <div class="body">
-      <p class="note">Dear <strong>${tenantName}</strong>,<br><br>
-        Your application for <strong>${propertyName}</strong> has been reviewed. 
-        Below are the details of your rental agreement. Contact your agent if you have any questions.
-      </p>
-      <div class="section">
-        <h3>Property Details</h3>
-        <table>
-          <tr><td style="color:#7f9585">Property</td><td>${propertyName}</td></tr>
-          <tr><td style="color:#7f9585">Address</td><td>${propertyAddress}</td></tr>
-          <tr><td style="color:#7f9585">Type</td><td>${propertyType}</td></tr>
-        </table>
-      </div>
-      <div class="section">
-        <h3>Lease Terms</h3>
-        <table>
-          <tr><td style="color:#7f9585">Start date</td><td>${startDate}</td></tr>
-          <tr><td style="color:#7f9585">End date</td><td>${endDate}</td></tr>
-          <tr><td style="color:#7f9585">Monthly rent</td><td>${formatKes(rent)}</td></tr>
-          <tr><td style="color:#7f9585">Security deposit</td><td>${formatKes(deposit)}</td></tr>
-          ${paybill && paybill !== 'N/A' ? `<tr><td style="color:#7f9585">M-Pesa Paybill</td><td>${paybill}</td></tr>` : ''}
-        </table>
-      </div>
-      <p class="note">Please do not make any payment until you have received and signed the full contract document from your agent.</p>
-      <div class="agent-sig">
-        <strong style="display:block;color:#1d3d33;font-size:13px">${agentName}</strong>
-        <span style="color:#718078;font-size:12px">${agentEmail}${agentPhone ? ' · ' + agentPhone : ''}</span>
-      </div>
+    <div class="section">
+      <h3>Property Details</h3>
+      <table>
+        <tr><td>Property</td><td>${propertyName}</td></tr>
+        <tr><td>Address</td><td>${propertyAddress}</td></tr>
+        <tr><td>Type</td><td>${propertyType}</td></tr>
+      </table>
     </div>
-    <div class="footer">
-      Habitat Housing Marketplace · Sent on behalf of ${agentName}.<br>
-      If you did not apply for a home on Habitat, please disregard this email.
+    <div class="section">
+      <h3>Lease Terms</h3>
+      <table>
+        <tr><td>Start date</td><td>${startDate}</td></tr>
+        <tr><td>End date</td><td>${endDate}</td></tr>
+        <tr><td>Monthly rent</td><td>${formatKes(rent)}</td></tr>
+        <tr><td>Security deposit</td><td>${formatKes(deposit)}</td></tr>
+        ${paybill && paybill !== 'N/A' ? `<tr><td>M-Pesa Paybill</td><td>${paybill}</td></tr>` : ''}
+      </table>
+    </div>
+    <p class="note">Please do not make any payment until you have reviewed and signed the attached contract.</p>
+    <div class="agent-sig">
+      <strong style="display:block;color:#1d3d33;font-size:13px">${agentName}</strong>
+      <span style="color:#718078;font-size:12px">${agentEmail}${agentPhone ? ' · ' + agentPhone : ''}</span>
     </div>
   </div>
+  <div class="footer">
+    Habitat Housing Marketplace · Sent on behalf of ${agentName}.<br>
+    If you did not apply for a home on Habitat, please disregard this email.
+  </div>
+</div>
 </body>
 </html>`
 
-    // Build the raw email in RFC 2822 format and send via Gmail API using OAuth2-less
-    // approach: SMTP over fetch using Gmail's REST API with App Password via basic auth
-    // encoded as base64 for the Gmail API sendRaw endpoint.
+    const textBody = `Dear ${tenantName},\n\nYour rental contract for ${propertyName} is attached to this email as a PDF.\nPlease review, sign, and return a copy to your agent.\n\nLease Terms:\n- Start: ${startDate}\n- End: ${endDate}\n- Monthly rent: ${formatKes(rent)}\n- Security deposit: ${formatKes(deposit)}\n\nAgent: ${agentName} | ${agentEmail}${agentPhone ? ' | ' + agentPhone : ''}\n\nHabitat Housing Marketplace`
 
-    // Encode credentials for basic auth
-    const credentials = btoa(`${GMAIL_USER}:${GMAIL_APP_PASSWORD}`)
-
-    // Build raw MIME message
-    const boundary = `boundary_${Date.now()}`
-    const rawEmail = [
+    // Build RFC 2822 MIME message with attachment
+    const mimeLines: string[] = [
       `From: Habitat <${GMAIL_USER}>`,
       `To: ${tenantEmail}`,
       `Subject: Your Rental Contract — ${propertyName}`,
       `MIME-Version: 1.0`,
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
       ``,
       `--${boundary}`,
+      `Content-Type: multipart/alternative; boundary="${boundary}_alt"`,
+      ``,
+      `--${boundary}_alt`,
       `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: quoted-printable`,
       ``,
-      `Dear ${tenantName},`,
+      textBody,
       ``,
-      `Your application for ${propertyName} at ${propertyAddress} has been reviewed.`,
-      ``,
-      `Lease Terms:`,
-      `- Start: ${startDate}`,
-      `- End: ${endDate}`,
-      `- Monthly rent: ${formatKes(rent)}`,
-      `- Security deposit: ${formatKes(deposit)}`,
-      ``,
-      `Contact: ${agentName} | ${agentEmail}${agentPhone ? ' | ' + agentPhone : ''}`,
-      ``,
-      `--${boundary}`,
+      `--${boundary}_alt`,
       `Content-Type: text/html; charset="UTF-8"`,
+      `Content-Transfer-Encoding: quoted-printable`,
       ``,
-      html,
+      htmlBody,
       ``,
-      `--${boundary}--`,
-    ].join('\r\n')
+      `--${boundary}_alt--`,
+    ]
 
-    // Base64url encode the raw email for Gmail API
+    // Add PDF attachment if provided
+    if (pdfBase64) {
+      mimeLines.push(
+        ``,
+        `--${boundary}`,
+        `Content-Type: application/pdf`,
+        `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="${fileName}"`,
+        ``,
+        // Split base64 into 76-char lines (RFC 2045)
+        pdfBase64.match(/.{1,76}/g)?.join('\r\n') || pdfBase64,
+        ``,
+      )
+    }
+
+    mimeLines.push(`--${boundary}--`)
+
+    const rawEmail = mimeLines.join('\r\n')
+
+    // Base64url encode for Gmail API
     const encodedEmail = btoa(unescape(encodeURIComponent(rawEmail)))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '')
 
-    // Use Gmail REST API with App Password via OAuth — but since App Password
-    // doesn't support OAuth, use the SMTP relay via fetch to smtp2go or use
-    // Supabase's built-in pg_net to call Gmail SMTP.
-    // Best approach without OAuth: use smtp4dev-compatible service.
-    // We'll use the Gmail SMTP via nodemailer-style raw TCP — use smtp library that works.
+    // Send via Gmail REST API using basic auth with App Password
+    const authHeader = 'Basic ' + btoa(`${GMAIL_USER}:${GMAIL_APP_PASSWORD}`)
 
-    // Use deno-mailer which is compatible with current Deno
+    // Gmail API requires OAuth2, so use SMTP via denomailer
     const { SMTPClient } = await import('https://deno.land/x/denomailer@1.6.0/mod.ts')
 
     const client = new SMTPClient({
@@ -177,11 +192,19 @@ serve(async (req) => {
       },
     })
 
+    const attachments = pdfBase64 ? [{
+      filename: fileName,
+      contentType: 'application/pdf',
+      encoding: 'base64',
+      content: pdfBase64,
+    }] : []
+
     await client.send({
       from: `Habitat <${GMAIL_USER}>`,
       to: tenantEmail,
       subject: `Your Rental Contract — ${propertyName}`,
-      html,
+      html: htmlBody,
+      attachments,
     })
 
     await client.close()
