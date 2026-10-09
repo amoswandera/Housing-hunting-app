@@ -806,45 +806,43 @@ export const fetchMyApplications = async (token) => {
   const homeIds = [...new Set(data.filter(a => a.home_id).map(a => a.home_id))]
 
   // Fetch home details via SECURITY DEFINER function — bypasses available=true RLS
-  // Falls back to direct query if the function doesn't exist yet
+  // The function now includes the primary image from home_images table
   let homeMap = {}
   if (homeIds.length > 0) {
     const { data: homeRows, error: fnError } = await supabase
       .rpc('get_tenant_home_details', { p_home_ids: homeIds })
 
-    if (!fnError && homeRows) {
+    if (fnError) {
+      console.error('Error fetching home details:', fnError)
+    }
+
+    if (homeRows) {
       homeRows.forEach(h => { homeMap[h.id] = h })
-    } else {
-      // Fallback: fetch only available homes (taken homes will show blank — run SQL above to fix)
-      const { data: homesData } = await supabase
-        .from('homes')
-        .select(`id, name, location, region, type, price, deposit, image, available,
-          profiles!homes_owner_id_fkey (name, phone, bio, company)`)
-        .in('id', homeIds)
-      ;(homesData || []).forEach(h => {
-        homeMap[h.id] = {
-          ...h,
-          agent_name: h.profiles?.name || '',
-          agent_phone: h.profiles?.phone || '',
-          agent_bio: h.profiles?.bio || '',
-          agent_company: h.profiles?.company || '',
-        }
-      })
     }
   }
 
   // Fetch home_images for all home IDs in one query
+  // This is a backup in case the function doesn't return images
   let imagesByHome = {}
   if (homeIds.length > 0) {
-    const { data: imagesData } = await supabase
-      .from('home_images')
-      .select('home_id, image_url, is_primary, order_index')
-      .in('home_id', homeIds)
-      .order('order_index', { ascending: true })
-    ;(imagesData || []).forEach(img => {
-      if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
-      imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
-    })
+    try {
+      const { data: imagesData, error: imagesError } = await supabase
+        .from('home_images')
+        .select('home_id, image_url, is_primary, order_index')
+        .in('home_id', homeIds)
+        .order('order_index', { ascending: true })
+
+      if (!imagesError && imagesData) {
+        imagesData.forEach(img => {
+          if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
+          imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
+        })
+      } else if (imagesError) {
+        console.error('Error fetching home images:', imagesError)
+      }
+    } catch (err) {
+      console.error('Exception fetching home images:', err)
+    }
   }
 
   return data.map((app) => {
