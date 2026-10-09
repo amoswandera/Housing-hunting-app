@@ -751,6 +751,7 @@ export const fetchMyApplications = async (token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
+  // Step 1: fetch applications
   const { data, error } = await supabase
     .from('applications')
     .select(`
@@ -780,20 +781,43 @@ export const fetchMyApplications = async (token) => {
 
   if (!data || !Array.isArray(data)) return []
 
-  return data.map((app) => ({
-    ...app,
-    tenant_id: app.tenant_id,
-    agent_name: app.homes?.profiles?.name || '',
-    agent_phone: app.homes?.profiles?.phone || '',
-    agent_bio: app.homes?.profiles?.bio || '',
-    agent_company: app.homes?.profiles?.company || '',
-    name: app.homes?.name || '',
-    location: app.homes?.location || '',
-    deposit: app.homes?.deposit || 0,
-    image: app.homes?.image || '',
-    home_available: Boolean(app.homes?.available),
-    payment_deadline: app.payment_deadline || null,
-  }))
+  // Step 2: for any application whose home join returned null (taken home blocked
+  // by RLS), fetch the home directly using the stored home_id so the tenant
+  // always sees the home name, image and location in their bookings.
+  const missingHomeIds = data
+    .filter(app => !app.homes && app.home_id)
+    .map(app => app.home_id)
+
+  let extraHomes = {}
+  if (missingHomeIds.length > 0) {
+    const { data: homesData } = await supabase
+      .from('homes')
+      .select(`
+        id, name, location, region, type, price, deposit, image, available,
+        profiles!homes_owner_id_fkey (name, phone, bio, company)
+      `)
+      .in('id', missingHomeIds)
+      .setHeader('Authorization', `Bearer ${token}`)
+    ;(homesData || []).forEach(h => { extraHomes[h.id] = h })
+  }
+
+  return data.map((app) => {
+    const home = app.homes || extraHomes[app.home_id] || null
+    return {
+      ...app,
+      tenant_id: app.tenant_id,
+      agent_name: home?.profiles?.name || '',
+      agent_phone: home?.profiles?.phone || '',
+      agent_bio: home?.profiles?.bio || '',
+      agent_company: home?.profiles?.company || '',
+      name: home?.name || '',
+      location: home?.location || '',
+      deposit: home?.deposit || 0,
+      image: home?.image || '',
+      home_available: Boolean(home?.available),
+      payment_deadline: app.payment_deadline || null,
+    }
+  })
 }
 
 export const fetchAgentApplications = async (token) => {
