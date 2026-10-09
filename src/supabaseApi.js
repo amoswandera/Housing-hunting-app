@@ -751,92 +751,73 @@ export const fetchMyApplications = async (token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  // Fetch applications with home data. The homes join uses the tenant's token
-  // which — once the "Tenants can view homes they applied for" RLS policy is
-  // in place — returns data even for taken (available=false) homes.
+  // Fetch only the applications — no homes join to avoid RLS blocking taken homes
   const { data, error } = await supabase
     .from('applications')
-    .select(`
-      *,
-      homes (
-        id,
-        name,
-        location,
-        region,
-        type,
-        price,
-        deposit,
-        image,
-        available,
-        profiles!homes_owner_id_fkey (
-          name,
-          phone,
-          bio,
-          company
-        )
-      )
-    `)
+    .select('*')
     .eq('tenant_id', user.id)
     .order('created_at', { ascending: false })
-    .setHeader('Authorization', `Bearer ${token}`)
 
   handleSupabaseError(error)
-
   if (!data || !Array.isArray(data)) return []
 
-  // Collect all home IDs (including taken homes) so we can fetch their images
-  const allHomeIds = data
-    .filter(app => app.home_id)
-    .map(app => app.home_id)
+  // Get all unique home IDs from the applications
+  const homeIds = [...new Set(data.filter(a => a.home_id).map(a => a.home_id))]
 
-  // Fetch home_images for all homes in one query, including taken homes
+  // Fetch home details via SECURITY DEFINER function — bypasses available=true RLS
+  // Falls back to direct query if the function doesn't exist yet
+  let homeMap = {}
+  if (homeIds.length > 0) {
+    const { data: homeRows, error: fnError } = await supabase
+      .rpc('get_tenant_home_details', { p_home_ids: homeIds })
+
+    if (!fnError && homeRows) {
+      homeRows.forEach(h => { homeMap[h.id] = h })
+    } else {
+      // Fallback: fetch only available homes (taken homes will show blank — run SQL above to fix)
+      const { data: homesData } = await supabase
+        .from('homes')
+        .select(`id, name, location, region, type, price, deposit, image, available,
+          profiles!homes_owner_id_fkey (name, phone, bio, company)`)
+        .in('id', homeIds)
+      ;(homesData || []).forEach(h => {
+        homeMap[h.id] = {
+          ...h,
+          agent_name: h.profiles?.name || '',
+          agent_phone: h.profiles?.phone || '',
+          agent_bio: h.profiles?.bio || '',
+          agent_company: h.profiles?.company || '',
+        }
+      })
+    }
+  }
+
+  // Fetch home_images for all home IDs in one query
   let imagesByHome = {}
-  if (allHomeIds.length > 0) {
+  if (homeIds.length > 0) {
     const { data: imagesData } = await supabase
       .from('home_images')
       .select('home_id, image_url, is_primary, order_index')
-      .in('home_id', allHomeIds)
+      .in('home_id', homeIds)
       .order('order_index', { ascending: true })
-      .setHeader('Authorization', `Bearer ${token}`)
     ;(imagesData || []).forEach(img => {
       if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
-      imagesByHome[img.home_id].push({ ...img, url: img.image_url || '' })
+      imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
     })
   }
 
-  // For applications where the homes join returned null (RLS not yet updated),
-  // do a fallback fetch so tenants always see their home details.
-  const missingHomeIds = data
-    .filter(app => !app.homes && app.home_id)
-    .map(app => app.home_id)
-
-  let extraHomes = {}
-  if (missingHomeIds.length > 0) {
-    const { data: homesData } = await supabase
-      .from('homes')
-      .select(`
-        id, name, location, region, type, price, deposit, image, available,
-        profiles!homes_owner_id_fkey (name, phone, bio, company)
-      `)
-      .in('id', missingHomeIds)
-      .setHeader('Authorization', `Bearer ${token}`)
-    ;(homesData || []).forEach(h => { extraHomes[h.id] = h })
-  }
-
   return data.map((app) => {
-    const home = app.homes || extraHomes[app.home_id] || null
-    // Resolve the best available image for this home
+    const home = homeMap[app.home_id] || null
     const imgs = imagesByHome[app.home_id]
     const primaryImg = imgs?.find(i => i.is_primary) || imgs?.[0]
     const resolvedImage = home?.image || primaryImg?.url || ''
 
     return {
       ...app,
-      tenant_id: app.tenant_id,
-      agent_name: home?.profiles?.name || '',
-      agent_phone: home?.profiles?.phone || '',
-      agent_bio: home?.profiles?.bio || '',
-      agent_company: home?.profiles?.company || '',
+      agent_name: home?.agent_name || '',
+      agent_phone: home?.agent_phone || '',
+      agent_bio: home?.agent_bio || '',
+      agent_company: home?.agent_company || '',
       name: home?.name || '',
       location: home?.location || '',
       deposit: home?.deposit || 0,
