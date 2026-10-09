@@ -385,6 +385,7 @@ function App() {
       setApplications(items)
       setBooked(items.filter((item) => ['submitted', 'approved'].includes(item.status)).map((item) => item.home_id))
       // Re-fetch homes including any approved home so the tenant can still view it
+      // in the discover view alongside other available homes
       const approvedHomeIds = items
         .filter(a => a.status === 'approved' && a.home_id)
         .map(a => a.home_id)

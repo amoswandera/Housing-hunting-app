@@ -395,18 +395,35 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   }
 
   // Merge in any approved (taken) homes the tenant should still see
-  // These are fetched separately to avoid breaking the main query with
-  // invalid PostgREST .or() syntax for UUID arrays
+  // Use SECURITY DEFINER function to bypass RLS and fetch by ID
   if (!adminMode && includeHomeIds.length > 0) {
     const existingIds = new Set(filteredHomes.map(h => h.id))
     const missingApproved = includeHomeIds.filter(id => !existingIds.has(id))
     if (missingApproved.length > 0) {
-      const { data: approvedHomes } = await supabase
-        .from('homes')
-        .select(`*, profiles!homes_owner_id_fkey (name, phone, bio, company)`)
-        .in('id', missingApproved)
-      if (approvedHomes) {
-        filteredHomes = [...filteredHomes, ...approvedHomes]
+      // Try to use SECURITY DEFINER function first (bypasses RLS)
+      const { data: approvedHomes, error: fnError } = await supabase
+        .rpc('get_homes_by_ids', { p_home_ids: missingApproved })
+
+      if (!fnError && approvedHomes) {
+        // Fetch profiles for these homes
+        const profileIds = approvedHomes.map(h => h.owner_id).filter(id => id)
+        let profilesMap = {}
+        if (profileIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, name, phone, bio, company')
+            .in('id', profileIds)
+          ;(profiles || []).forEach(p => { profilesMap[p.id] = p })
+        }
+
+        // Merge profiles into homes
+        const homesWithProfiles = approvedHomes.map(h => ({
+          ...h,
+          profiles: profilesMap[h.owner_id] || null
+        }))
+
+        filteredHomes = [...filteredHomes, ...homesWithProfiles]
+
         // Also fetch images for these homes
         const { data: approvedImgs } = await supabase
           .from('home_images')
