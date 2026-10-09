@@ -991,7 +991,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 )}
               </div>
               <button 
-                onClick={() => { toggleAvailability(selectedHome); setSelectedHome(null) }}
+                onClick={async () => { await toggleAvailability(selectedHome); setSelectedHome(null) }}
                 style={{ 
                   width: '100%', padding: '12px', borderRadius: '8px',
                   background: selectedHome.available ? '#ef4444' : '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px'
