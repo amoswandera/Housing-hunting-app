@@ -311,7 +311,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
     }
   }
 
-  const { data: homesData, error: homesError } = await query
+  const { data: homesData, error: homesError } = await query.order('created_at', { ascending: false })
   handleSupabaseError(homesError)
 
   // Get all home IDs

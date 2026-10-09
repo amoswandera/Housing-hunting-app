@@ -240,7 +240,13 @@ function App() {
   const [applyConfirm, setApplyConfirm] = useState(null) // home to confirm application for
   const [applyMessage, setApplyMessage] = useState('') // tenant's custom message
   const [priceRange, setPriceRange] = useState('All prices')
+  const [sortBy, setSortBy] = useState('default') // 'default' | 'price-asc' | 'price-desc' | 'newest'
+  const [homePage, setHomePage] = useState(1) // pagination page for discover
+  const [savedSearch, setSavedSearch] = useState('')
+  const [savedRegion, setSavedRegion] = useState('All regions')
+  const [savedCategory, setSavedCategory] = useState('All categories')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('All')
+  const [showNotifications, setShowNotifications] = useState(false)
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -376,19 +382,27 @@ function App() {
       })
   }, [authUser?.token])
 
-  const filteredHomes = useMemo(() => homes.filter((home) => {
-    const matchesRegion = region === 'All regions' || home.region === region
-    const matchesCategory = category === 'All categories' || home.type === category
-    const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
-    const matchesQuery = searchable.includes(query.toLowerCase())
-    let matchesPrice = true
-    if (priceRange === 'Under 30k') matchesPrice = home.price < 30000
-    else if (priceRange === '30k–60k') matchesPrice = home.price >= 30000 && home.price <= 60000
-    else if (priceRange === '60k–100k') matchesPrice = home.price > 60000 && home.price <= 100000
-    else if (priceRange === '100k–200k') matchesPrice = home.price > 100000 && home.price <= 200000
-    else if (priceRange === 'Over 200k') matchesPrice = home.price > 200000
-    return matchesRegion && matchesCategory && matchesQuery && matchesPrice
-  }), [category, homes, query, region, priceRange])
+  const PAGE_SIZE = 12
+
+  const filteredHomes = useMemo(() => {
+    let result = homes.filter((home) => {
+      const matchesRegion = region === 'All regions' || home.region === region
+      const matchesCategory = category === 'All categories' || home.type === category
+      const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
+      const matchesQuery = searchable.includes(query.toLowerCase())
+      let matchesPrice = true
+      if (priceRange === 'Under 30k') matchesPrice = home.price < 30000
+      else if (priceRange === '30k–60k') matchesPrice = home.price >= 30000 && home.price <= 60000
+      else if (priceRange === '60k–100k') matchesPrice = home.price > 60000 && home.price <= 100000
+      else if (priceRange === '100k–200k') matchesPrice = home.price > 100000 && home.price <= 200000
+      else if (priceRange === 'Over 200k') matchesPrice = home.price > 200000
+      return matchesRegion && matchesCategory && matchesQuery && matchesPrice
+    })
+    if (sortBy === 'price-asc') result = [...result].sort((a, b) => a.price - b.price)
+    else if (sortBy === 'price-desc') result = [...result].sort((a, b) => b.price - a.price)
+    else if (sortBy === 'newest') result = [...result].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    return result
+  }, [category, homes, query, region, priceRange, sortBy])
 
   const showToast = useCallback((message) => {
     setToast(message)
@@ -500,7 +514,38 @@ function App() {
     else showToast('Super-admin details are managed by the system.')
   }
 
-  const savedHomes = homes.filter((home) => saved.includes(home.id))
+  // Notifications: tenant application updates + 72h payment alerts
+  const notifications = useMemo(() => {
+    const notes = []
+    if (authUser?.role === 'Tenant') {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      applications.forEach(app => {
+        if (app.status === 'approved') {
+          const deadline = app.payment_deadline ? new Date(app.payment_deadline) : null
+          if (deadline && deadline < new Date() && app.payment_status !== 'paid') {
+            notes.push({ id: `pay-${app.id}`, type: 'warning', text: `⚠ Payment overdue for ${app.name || 'a home'}. Deadline passed.` })
+          } else if (deadline && app.payment_status !== 'paid') {
+            const hrs = Math.max(0, Math.round((deadline - new Date()) / 3600000))
+            notes.push({ id: `pay-${app.id}`, type: 'info', text: `⏰ Pay deposit for ${app.name || 'a home'} within ${hrs}h to secure it.` })
+          } else {
+            notes.push({ id: `appr-${app.id}`, type: 'success', text: `✓ Your application for ${app.name || 'a home'} was approved.` })
+          }
+        }
+        if (app.status === 'declined' && app.reviewed_at && new Date(app.reviewed_at) > sevenDaysAgo) {
+          notes.push({ id: `decl-${app.id}`, type: 'neutral', text: `Your application for ${app.name || 'a home'} was declined.` })
+        }
+      })
+    }
+    return notes
+  }, [applications, authUser])
+
+  const savedHomes = useMemo(() => homes.filter((home) => {
+    if (!saved.includes(home.id)) return false
+    const matchesRegion = savedRegion === 'All regions' || home.region === savedRegion
+    const matchesCategory = savedCategory === 'All categories' || home.type === savedCategory
+    const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
+    return matchesRegion && matchesCategory && searchable.includes(savedSearch.toLowerCase())
+  }), [homes, saved, savedRegion, savedCategory, savedSearch])
   const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex="0" onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div><span className="rating">★ 4.9</span></div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
 
   if (showAuthScreen) {
@@ -508,7 +553,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" onClick={() => setShowNotifications(false)}>
       {mobileMenuOpen && <div className="mobile-drawer-backdrop" onClick={() => setMobileMenuOpen(false)} />}
       <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="brand"><span className="brand-mark">h</span><span>habitat</span></div>
@@ -545,7 +590,36 @@ function App() {
           <div className="mobile-brand"><span className="brand-mark">h</span> habitat</div>
           <div className="role-badge"><span className="role-dot"></span>{authUser ? `${role} workspace` : 'Browsing as guest'}</div>
           <div className="top-actions">
-            <button className="icon-button" aria-label="Notifications">♧<i></i></button>
+            <div style={{ position: 'relative' }}>
+              <button className="icon-button" aria-label="Notifications" onClick={() => setShowNotifications(n => !n)} style={{ position: 'relative' }}>
+                🔔
+                {notifications.length > 0 && (
+                  <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#df775d', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '10px', lineHeight: 1.4 }}>
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+              {showNotifications && (
+                <div style={{ position: 'absolute', top: '40px', right: 0, background: '#fff', border: '1px solid #e7ede8', borderRadius: '8px', boxShadow: '0 8px 30px rgba(0,0,0,.12)', width: '300px', zIndex: 50, overflow: 'hidden' }}
+                  onClick={e => e.stopPropagation()}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid #e7ede8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '12px', color: '#173d36' }}>Notifications</strong>
+                    <button onClick={() => setShowNotifications(false)} style={{ border: 'none', background: 'none', color: '#9aa49e', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: '12px', color: '#9aa49e' }}>No new notifications</div>
+                  ) : (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', maxHeight: '320px', overflowY: 'auto' }}>
+                      {notifications.map(n => (
+                        <li key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f0', fontSize: '12px', lineHeight: 1.5, color: n.type === 'warning' ? '#92400e' : n.type === 'success' ? '#1a5c3a' : '#4b5563', background: n.type === 'warning' ? '#fff8ed' : n.type === 'success' ? '#f0faf4' : '#fff' }}>
+                          {n.text}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
             {authUser ? (
               <>
                 <div className="mini-avatar">{authUser.initials}</div>
@@ -579,15 +653,27 @@ function App() {
           )}
           {activeView === 'discover' && !showTenantProfile && <>
           <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
-          <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => setRegion(event.target.value)}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => setPriceRange(event.target.value)}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
-          <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available homes, updated today</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
-          <section className="home-grid">{filteredHomes.map(renderHomeCard)}</section>
+          <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); setHomePage(1) }} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => { setRegion(event.target.value); setHomePage(1) }}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => { setCategory(event.target.value); setHomePage(1) }}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => { setPriceRange(event.target.value); setHomePage(1) }}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><div className="select-field category-select"><span>⇅</span><select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setHomePage(1) }}><option value="default">Default order</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="newest">Newest first</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
+          <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available home{filteredHomes.length !== 1 ? 's' : ''}</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
+          <section className="home-grid">{filteredHomes.slice(0, homePage * PAGE_SIZE).map(renderHomeCard)}</section>
           {filteredHomes.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
+          {filteredHomes.length > homePage * PAGE_SIZE && (
+            <div style={{ textAlign: 'center', margin: '24px 0' }}>
+              <button onClick={() => setHomePage(p => p + 1)} style={{ background: 'none', border: '1px solid #d2ded5', color: '#3e735e', borderRadius: '6px', padding: '10px 28px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                Load more homes ({filteredHomes.length - homePage * PAGE_SIZE} remaining)
+              </button>
+            </div>
+          )}
           </>}
           {activeView === 'saved' && !showTenantProfile && <>
           <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
-          <div className="content-heading"><div><h2>Saved homes</h2><p>{savedHomes.length} home{savedHomes.length === 1 ? '' : 's'} you have saved</p></div></div>
-          {savedHomes.length > 0 ? <section className="home-grid">{savedHomes.map(renderHomeCard)}</section> : <div className="empty-state"><strong>No saved homes yet</strong><span>Tap the heart on any home to save it here.</span></div>}
+          <div className="content-heading"><div><h2>Saved homes</h2><p>{savedHomes.length} home{savedHomes.length === 1 ? '' : 's'} saved</p></div></div>
+          <div className="users-toolbar" style={{ margin: '0 0 20px' }}>
+            <div className="search-field admin-user-search"><span>⌕</span><input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} placeholder="Search saved homes" /></div>
+            <select className="role-filter" value={savedRegion} onChange={e => setSavedRegion(e.target.value)}><option value="All regions">All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select>
+            <select className="role-filter" value={savedCategory} onChange={e => setSavedCategory(e.target.value)}><option value="All categories">All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select>
+          </div>
+          {savedHomes.length > 0 ? <section className="home-grid">{savedHomes.map(renderHomeCard)}</section> : <div className="empty-state"><strong>{saved.length > 0 ? 'No saved homes match your filter' : 'No saved homes yet'}</strong><span>{saved.length > 0 ? 'Try clearing the search or filters.' : 'Tap the heart on any home to save it here.'}</span></div>}
           </>}
           {activeView === 'bookings' && !showTenantProfile && <>
           <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
