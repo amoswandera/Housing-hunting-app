@@ -591,7 +591,7 @@ function App() {
           <div className="role-badge"><span className="role-dot"></span>{authUser ? `${role} workspace` : 'Browsing as guest'}</div>
           <div className="top-actions">
             <div style={{ position: 'relative' }}>
-              <button className="icon-button" aria-label="Notifications" onClick={() => setShowNotifications(n => !n)} style={{ position: 'relative' }}>
+              <button className="icon-button" aria-label="Notifications" onClick={(e) => { e.stopPropagation(); setShowNotifications(n => !n) }} style={{ position: 'relative' }}>
                 🔔
                 {notifications.length > 0 && (
                   <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#df775d', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '10px', lineHeight: 1.4 }}>
