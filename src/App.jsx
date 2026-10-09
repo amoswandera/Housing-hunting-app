@@ -809,9 +809,7 @@ function App() {
                   <tbody>
                     {applications
                       .filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter)
-                      .map((application) => {
-                        console.log('Rendering application:', application.id, 'image prop:', application.image)
-                        return (
+                      .map((application) => (
                       <tr key={application.id}>
                         <td>
                           <div className="users-table-name">
@@ -907,8 +905,7 @@ function App() {
                           )}
                         </td>
                       </tr>
-                        )
-                      })}
+                      ))}
                   </tbody>
                 </table>
               </div>
