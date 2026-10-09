@@ -1261,54 +1261,145 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       {/* Approve confirmation modal — shows other applicants, confirms auto-decline */}
       {approveConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,34,28,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
-          onClick={() => setApproveConfirm(null)}>
-          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '500px', width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
+          onClick={() => { setApproveConfirm(null); setApproveConfirm(c => c ? { ...c, previewApplicant: null } : null) }}>
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '520px', width: '100%', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 8px', color: '#173d36', font: '400 22px Georgia,serif' }}>Confirm Approval</h3>
-            <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 20px' }}>
-              You are approving <strong>{approveConfirm.application.tenant_name}</strong> for <strong>{approveConfirm.application.name || 'this home'}</strong>.
-            </p>
 
-            {approveConfirm.otherApplicants.length > 0 ? (
+            {/* ── Applicant preview panel ── */}
+            {approveConfirm.previewApplicant ? (
               <>
-                <div style={{ background: '#fff8ed', border: '1px solid #f59e0b', borderRadius: '7px', padding: '12px 16px', marginBottom: '20px' }}>
-                  <strong style={{ fontSize: '12px', color: '#92400e' }}>
-                    ⚠ {approveConfirm.otherApplicants.length} other applicant{approveConfirm.otherApplicants.length > 1 ? 's' : ''} will be automatically declined and notified by email:
-                  </strong>
-                  <ul style={{ margin: '10px 0 0', padding: '0 0 0 18px' }}>
-                    {approveConfirm.otherApplicants.map(a => (
-                      <li key={a.id} style={{ fontSize: '12px', color: '#78350f', marginBottom: '4px' }}>
-                        {a.tenant_name} {a.tenant_email ? <span style={{ color: '#9ca3af' }}>— {a.tenant_email}</span> : <span style={{ color: '#9ca3af' }}>— no email</span>}
-                      </li>
-                    ))}
-                  </ul>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                  <button onClick={() => setApproveConfirm(c => ({ ...c, previewApplicant: null }))}
+                    style={{ border: 'none', background: 'none', color: '#3e735e', fontWeight: 700, fontSize: '13px', cursor: 'pointer', padding: 0 }}>
+                    ← Back
+                  </button>
+                  <h3 style={{ margin: 0, color: '#173d36', font: '400 20px Georgia,serif' }}>Applicant Profile</h3>
+                </div>
+
+                {/* Applicant identity */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
+                  <div className="avatar" style={{ width: '52px', height: '52px', fontSize: '20px', flexShrink: 0 }}>
+                    {approveConfirm.previewApplicant.tenant_name?.slice(0,2).toUpperCase() || 'T'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '15px' }}>{approveConfirm.previewApplicant.tenant_name || 'Tenant'}</div>
+                    <div style={{ color: '#7f9585', fontSize: '11px', marginTop: '3px' }}>{approveConfirm.previewApplicant.tenant_identifier || '—'}</div>
+                  </div>
+                </div>
+
+                <div className="app-detail-grid" style={{ marginBottom: '18px' }}>
+                  <div className="app-detail-card">
+                    <h3>Contact & Identity</h3>
+                    <div className="app-detail-field"><span>Phone</span><strong>{approveConfirm.previewApplicant.tenant_phone || '—'}</strong></div>
+                    <div className="app-detail-field"><span>National ID</span><strong>{approveConfirm.previewApplicant.tenant_national_id || '—'}</strong></div>
+                    <div className="app-detail-field"><span>Occupation</span><strong>{approveConfirm.previewApplicant.tenant_occupation || '—'}</strong></div>
+                    {approveConfirm.previewApplicant.tenant_bio && (
+                      <div className="app-detail-field"><span>About</span><strong style={{ fontWeight: 400, lineHeight: 1.5, display: 'block' }}>{approveConfirm.previewApplicant.tenant_bio}</strong></div>
+                    )}
+                  </div>
+                  <div className="app-detail-card">
+                    <h3>Application</h3>
+                    <div className="app-detail-field"><span>Applied on</span><strong>{new Date(approveConfirm.previewApplicant.created_at).toLocaleDateString()}</strong></div>
+                    {approveConfirm.previewApplicant.tenant_message && (
+                      <div className="app-detail-field"><span>Their message</span><strong style={{ fontWeight: 400, lineHeight: 1.5, display: 'block' }}>{approveConfirm.previewApplicant.tenant_message}</strong></div>
+                    )}
+                    {approveConfirm.previewApplicant.tenant_phone && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                        <a href={`tel:${cleanPhoneNumber(approveConfirm.previewApplicant.tenant_phone)}`} className="app-action-call" style={{ fontSize: '11px', padding: '7px 12px' }}>📞 Call</a>
+                        <a href={getWhatsAppUrl(approveConfirm.previewApplicant.tenant_phone)} target="_blank" rel="noopener noreferrer" className="app-action-whatsapp" style={{ fontSize: '11px', padding: '7px 12px' }}>💬 WhatsApp</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Approve this applicant instead button */}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={async () => {
+                      const swapped = {
+                        ...approveConfirm,
+                        application: approveConfirm.previewApplicant,
+                        otherApplicants: [
+                          approveConfirm.application, // the original becomes "other"
+                          ...approveConfirm.otherApplicants.filter(a => a.id !== approveConfirm.previewApplicant.id),
+                        ],
+                        previewApplicant: null,
+                      }
+                      setApproveConfirm(swapped)
+                    }}
+                    style={{ flex: 1, padding: '11px', background: '#173d36', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Approve {approveConfirm.previewApplicant.tenant_name} instead →
+                  </button>
+                  <button onClick={() => setApproveConfirm(c => ({ ...c, previewApplicant: null }))}
+                    style={{ padding: '11px 18px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '12px', cursor: 'pointer' }}>
+                    Back
+                  </button>
                 </div>
               </>
             ) : (
-              <p style={{ fontSize: '12px', color: '#718078', background: '#f6f9f5', padding: '12px 16px', borderRadius: '7px', marginBottom: '20px' }}>
-                No other applicants for this home.
-              </p>
-            )}
+              /* ── Main approval confirmation panel ── */
+              <>
+                <h3 style={{ margin: '0 0 8px', color: '#173d36', font: '400 22px Georgia,serif' }}>Confirm Approval</h3>
+                <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 20px' }}>
+                  You are approving <strong>{approveConfirm.application.tenant_name}</strong> for <strong>{approveConfirm.application.name || 'this home'}</strong>.
+                </p>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={async () => {
-                  const app = approveConfirm.application
-                  setApproveConfirm(null)
-                  await executeReview(app, 'approved')
-                  closeApplicationDetail()
-                }}
-                style={{ flex: 1, padding: '13px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                ✓ Confirm Approval
-              </button>
-              <button
-                onClick={() => setApproveConfirm(null)}
-                style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-            </div>
+                {approveConfirm.otherApplicants.length > 0 ? (
+                  <div style={{ background: '#fff8ed', border: '1px solid #f59e0b', borderRadius: '7px', padding: '12px 16px', marginBottom: '20px' }}>
+                    <strong style={{ fontSize: '12px', color: '#92400e', display: 'block', marginBottom: '10px' }}>
+                      ⚠ {approveConfirm.otherApplicants.length} other applicant{approveConfirm.otherApplicants.length > 1 ? 's' : ''} will be automatically declined and notified by email.
+                      Click any name to review their profile before confirming.
+                    </strong>
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                      {approveConfirm.otherApplicants.map(a => (
+                        <li key={a.id}
+                          onClick={() => setApproveConfirm(c => ({ ...c, previewApplicant: a }))}
+                          style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '6px', cursor: 'pointer', marginBottom: '4px', background: '#fff', border: '1px solid #f0e0bc', transition: 'background .15s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#fef3cd'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                        >
+                          <div className="avatar" style={{ width: '32px', height: '32px', fontSize: '12px', flexShrink: 0 }}>
+                            {a.tenant_name?.slice(0,2).toUpperCase() || 'T'}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: '#78350f' }}>{a.tenant_name}</div>
+                            <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {a.tenant_email || a.tenant_identifier || '—'}{a.tenant_occupation ? ` · ${a.tenant_occupation}` : ''}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700, flexShrink: 0 }}>View →</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '12px', color: '#718078', background: '#f6f9f5', padding: '12px 16px', borderRadius: '7px', marginBottom: '20px' }}>
+                    No other applicants for this home.
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={async () => {
+                      const app = approveConfirm.application
+                      setApproveConfirm(null)
+                      await executeReview(app, 'approved')
+                      closeApplicationDetail()
+                    }}
+                    style={{ flex: 1, padding: '13px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    ✓ Confirm Approval
+                  </button>
+                  <button
+                    onClick={() => setApproveConfirm(null)}
+                    style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
