@@ -302,13 +302,10 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
     `)
 
   // SuperAdmin sees all homes; everyone else sees only available ones
-  // Exception: if the tenant has an approved home, include it even if unavailable
+  // Exception: if the tenant has an approved home, fetch available homes normally
+  // then we merge the approved homes separately below
   if (!adminMode) {
-    if (includeHomeIds.length > 0) {
-      query = query.or(`available.eq.true,id.in.(${includeHomeIds.join(',')})`)
-    } else {
-      query = query.eq('available', true)
-    }
+    query = query.eq('available', true)
   }
 
   const { data: homesData, error: homesError } = await query.order('created_at', { ascending: false })
@@ -395,6 +392,33 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       h.location.toLowerCase().includes(filters.search.toLowerCase()) ||
       h.type.toLowerCase().includes(filters.search.toLowerCase())
     )
+  }
+
+  // Merge in any approved (taken) homes the tenant should still see
+  // These are fetched separately to avoid breaking the main query with
+  // invalid PostgREST .or() syntax for UUID arrays
+  if (!adminMode && includeHomeIds.length > 0) {
+    const existingIds = new Set(filteredHomes.map(h => h.id))
+    const missingApproved = includeHomeIds.filter(id => !existingIds.has(id))
+    if (missingApproved.length > 0) {
+      const { data: approvedHomes } = await supabase
+        .from('homes')
+        .select(`*, profiles!homes_owner_id_fkey (name, phone, bio, company)`)
+        .in('id', missingApproved)
+      if (approvedHomes) {
+        filteredHomes = [...filteredHomes, ...approvedHomes]
+        // Also fetch images for these homes
+        const { data: approvedImgs } = await supabase
+          .from('home_images')
+          .select('*')
+          .in('home_id', missingApproved)
+          .order('order_index', { ascending: true })
+        ;(approvedImgs || []).forEach(img => {
+          if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
+          imagesByHome[img.home_id].push({ ...img, url: img.image_url || img.url || '' })
+        })
+      }
+    }
   }
 
   // Ensure data is an array before mapping
