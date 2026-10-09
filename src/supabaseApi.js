@@ -816,8 +816,6 @@ export const fetchMyApplications = async (token) => {
       console.error('Error fetching home details:', fnError)
     }
 
-    console.log('Home rows from function:', homeRows)
-
     if (homeRows) {
       homeRows.forEach(h => { homeMap[h.id] = h })
     }
@@ -839,11 +837,9 @@ export const fetchMyApplications = async (token) => {
           if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
           imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
         })
-      } else if (imagesError) {
-        console.error('Error fetching home images:', imagesError)
       }
     } catch (err) {
-      console.error('Exception fetching home images:', err)
+      // Silently ignore errors - function will use single image from homes table
     }
   }
 
@@ -852,8 +848,6 @@ export const fetchMyApplications = async (token) => {
     const imgs = imagesByHome[app.home_id]
     const primaryImg = imgs?.find(i => i.is_primary) || imgs?.[0]
     const resolvedImage = home?.image || primaryImg?.url || ''
-
-    console.log('Application:', app.id, 'Home:', home?.name, 'Home image from function:', home?.image, 'Images from table:', imgs, 'Resolved image:', resolvedImage)
 
     return {
       ...app,
