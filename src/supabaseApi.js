@@ -751,7 +751,9 @@ export const fetchMyApplications = async (token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  // Step 1: fetch applications
+  // Fetch applications with home data. The homes join uses the tenant's token
+  // which — once the "Tenants can view homes they applied for" RLS policy is
+  // in place — returns data even for taken (available=false) homes.
   const { data, error } = await supabase
     .from('applications')
     .select(`
@@ -776,14 +778,34 @@ export const fetchMyApplications = async (token) => {
     `)
     .eq('tenant_id', user.id)
     .order('created_at', { ascending: false })
+    .setHeader('Authorization', `Bearer ${token}`)
 
   handleSupabaseError(error)
 
   if (!data || !Array.isArray(data)) return []
 
-  // Step 2: for any application whose home join returned null (taken home blocked
-  // by RLS), fetch the home directly using the stored home_id so the tenant
-  // always sees the home name, image and location in their bookings.
+  // Collect all home IDs (including taken homes) so we can fetch their images
+  const allHomeIds = data
+    .filter(app => app.home_id)
+    .map(app => app.home_id)
+
+  // Fetch home_images for all homes in one query, including taken homes
+  let imagesByHome = {}
+  if (allHomeIds.length > 0) {
+    const { data: imagesData } = await supabase
+      .from('home_images')
+      .select('home_id, image_url, is_primary, order_index')
+      .in('home_id', allHomeIds)
+      .order('order_index', { ascending: true })
+      .setHeader('Authorization', `Bearer ${token}`)
+    ;(imagesData || []).forEach(img => {
+      if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
+      imagesByHome[img.home_id].push({ ...img, url: img.image_url || '' })
+    })
+  }
+
+  // For applications where the homes join returned null (RLS not yet updated),
+  // do a fallback fetch so tenants always see their home details.
   const missingHomeIds = data
     .filter(app => !app.homes && app.home_id)
     .map(app => app.home_id)
@@ -803,6 +825,11 @@ export const fetchMyApplications = async (token) => {
 
   return data.map((app) => {
     const home = app.homes || extraHomes[app.home_id] || null
+    // Resolve the best available image for this home
+    const imgs = imagesByHome[app.home_id]
+    const primaryImg = imgs?.find(i => i.is_primary) || imgs?.[0]
+    const resolvedImage = home?.image || primaryImg?.url || ''
+
     return {
       ...app,
       tenant_id: app.tenant_id,
@@ -813,7 +840,7 @@ export const fetchMyApplications = async (token) => {
       name: home?.name || '',
       location: home?.location || '',
       deposit: home?.deposit || 0,
-      image: home?.image || '',
+      image: resolvedImage,
       home_available: Boolean(home?.available),
       payment_deadline: app.payment_deadline || null,
     }
