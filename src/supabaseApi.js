@@ -921,13 +921,27 @@ export const reviewApplication = async (id, review, token) => {
     updateData.paybill_pdf_url = paybillPdfUrl || ''
   }
 
-  const { data, error } = await supabase
+  // Try updating with payment_deadline first; if the column doesn't exist yet
+  // (migration not yet run), fall back without it so approval doesn't break.
+  let result = await supabase
     .from('applications')
     .update(updateData)
     .eq('id', id)
     .select()
     .single()
 
+  if (result.error && result.error.message.includes('payment_deadline')) {
+    // Column not yet added — retry without it
+    const { payment_deadline, ...updateDataWithoutDeadline } = updateData
+    result = await supabase
+      .from('applications')
+      .update(updateDataWithoutDeadline)
+      .eq('id', id)
+      .select()
+      .single()
+  }
+
+  const { data, error } = result
   handleSupabaseError(error)
 
   // When approved, automatically mark the home as taken
@@ -1477,11 +1491,19 @@ export const relistHome = async (homeId, token) => {
 
 export const returnHomeToAvailable = async (applicationId, homeId, token) => {
   // Revert application to submitted and relist the home
-  const { error: appError } = await supabase
+  // Try with payment_deadline first; gracefully fall back if column doesn't exist yet
+  let appResult = await supabase
     .from('applications')
     .update({ status: 'submitted', payment_deadline: null, reviewed_at: null })
     .eq('id', applicationId)
-  handleSupabaseError(appError)
+
+  if (appResult.error && appResult.error.message.includes('payment_deadline')) {
+    appResult = await supabase
+      .from('applications')
+      .update({ status: 'submitted', reviewed_at: null })
+      .eq('id', applicationId)
+  }
+  handleSupabaseError(appResult.error)
 
   const { error: homeError } = await supabase
     .from('homes')
