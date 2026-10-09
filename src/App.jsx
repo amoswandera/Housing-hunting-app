@@ -815,16 +815,28 @@ function App() {
                       <tr key={application.id}>
                         <td>
                           <div className="users-table-name">
-                            <div style={{
-                              width: '44px', height: '44px', borderRadius: '5px', flexShrink: 0,
-                              backgroundImage: application.image ? `url(${application.image})` : 'none',
-                              backgroundSize: 'cover', backgroundPosition: 'center',
-                              background: application.image ? undefined : '#e4ecdf',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '18px', color: '#6c9a77'
-                            }}>
-                              {!application.image && '⌂'}
-                            </div>
+                            {application.image ? (
+                              <img
+                                src={application.image}
+                                alt={application.name}
+                                style={{
+                                  width: '44px',
+                                  height: '44px',
+                                  borderRadius: '5px',
+                                  flexShrink: 0,
+                                  objectFit: 'cover',
+                                }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: '44px', height: '44px', borderRadius: '5px', flexShrink: 0,
+                                background: '#e4ecdf',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '18px', color: '#6c9a77'
+                              }}>
+                                ⌂
+                              </div>
+                            )}
                             <div>
                               <strong>{application.name || 'Home no longer listed'}</strong>
                               {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
