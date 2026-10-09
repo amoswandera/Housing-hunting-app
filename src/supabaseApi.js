@@ -365,6 +365,22 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
     console.log('home_images table not yet created, using single image fallback')
   }
 
+  // Fetch average ratings for all homes (gracefully fail if table doesn't exist yet)
+  let ratingsByHome = {}
+  try {
+    const { data: ratingsData } = await supabase
+      .from('ratings')
+      .select('home_id, stars')
+      .in('home_id', homeIds.length > 0 ? homeIds : [])
+    if (ratingsData) {
+      ratingsData.forEach(r => {
+        if (!ratingsByHome[r.home_id]) ratingsByHome[r.home_id] = { total: 0, count: 0 }
+        ratingsByHome[r.home_id].total += r.stars
+        ratingsByHome[r.home_id].count += 1
+      })
+    }
+  } catch { /* ratings table not yet created */ }
+
   // Apply filters
   let filteredHomes = homesData
   if (filters.region && filters.region !== 'All regions') {
@@ -392,6 +408,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
     // Use the primary (or first) image from home_images as the card thumbnail.
     const primaryImage = imgs.find(i => i.is_primary) || imgs[0]
     const cardImage = home.image || primaryImage?.url || ''
+    const ratingInfo = ratingsByHome[home.id]
     return {
       ...home,
       parking: Boolean(home.parking),
@@ -404,6 +421,8 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       image: cardImage,
       images: imgs,
       faqs: faqsByHome[home.id] || [],
+      rating: ratingInfo ? (ratingInfo.total / ratingInfo.count).toFixed(1) : null,
+      rating_count: ratingInfo ? ratingInfo.count : 0,
     }
   })
 }
@@ -1497,4 +1516,89 @@ export const fetchAllHomesAdmin = async (token) => {
     agent_company: home.profiles?.company || '',
     image: home.image || '',
   }))
+}
+
+// ─── Messaging ───────────────────────────────────────────────────────────────
+
+export const fetchMessages = async (applicationId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*, profiles!messages_sender_id_fkey (name, role)')
+    .eq('application_id', applicationId)
+    .order('created_at', { ascending: true })
+  if (error && error.message.includes('does not exist')) return []
+  handleSupabaseError(error)
+  return (data || []).map(m => ({
+    ...m,
+    sender_name: m.profiles?.name || 'Unknown',
+    sender_role: m.profiles?.role || m.sender_role,
+  }))
+}
+
+export const sendMessage = async (applicationId, body, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      application_id: applicationId,
+      sender_id: user.id,
+      sender_role: profile?.role || 'Tenant',
+      body: body.trim(),
+    })
+    .select()
+    .single()
+  handleSupabaseError(error)
+  return data
+}
+
+// ─── Ratings ─────────────────────────────────────────────────────────────────
+
+export const fetchHomeRatings = async (homeIds) => {
+  if (!homeIds || homeIds.length === 0) return {}
+  const { data, error } = await supabase
+    .from('ratings')
+    .select('home_id, stars')
+    .in('home_id', homeIds)
+  if (error && error.message.includes('does not exist')) return {}
+  if (error) return {}
+  // Compute average per home
+  const map = {}
+  ;(data || []).forEach(r => {
+    if (!map[r.home_id]) map[r.home_id] = { total: 0, count: 0 }
+    map[r.home_id].total += r.stars
+    map[r.home_id].count += 1
+  })
+  const result = {}
+  Object.entries(map).forEach(([homeId, { total, count }]) => {
+    result[homeId] = { average: (total / count).toFixed(1), count }
+  })
+  return result
+}
+
+export const submitRating = async (homeId, stars, review, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { data, error } = await supabase
+    .from('ratings')
+    .upsert({ home_id: homeId, tenant_id: user.id, stars, review: review || '' },
+      { onConflict: 'home_id,tenant_id' })
+    .select().single()
+  handleSupabaseError(error)
+  return data
+}
+
+export const fetchMyRating = async (homeId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+  const { data } = await supabase
+    .from('ratings')
+    .select('stars, review')
+    .eq('home_id', homeId)
+    .eq('tenant_id', user.id)
+    .maybeSingle()
+  return data || null
 }

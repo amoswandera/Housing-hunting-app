@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, submitApplication, transferAgentHomes, updatePassword, updateProfile } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMessages, fetchMyApplications, fetchMyRating, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, sendMessage, submitApplication, submitRating, transferAgentHomes, updatePassword, updateProfile } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -288,16 +288,25 @@ function App() {
   const [showAgentProfile, setShowAgentProfile] = useState(false)
   const [selectedAgentProfile, setSelectedAgentProfile] = useState(null)
   const [openFaqIndex, setOpenFaqIndex] = useState(null)
-  const [applyConfirm, setApplyConfirm] = useState(null) // home to confirm application for
-  const [applyMessage, setApplyMessage] = useState('') // tenant's custom message
+  const [applyConfirm, setApplyConfirm] = useState(null)
+  const [applyMessage, setApplyMessage] = useState('')
   const [priceRange, setPriceRange] = useState('All prices')
-  const [sortBy, setSortBy] = useState('default') // 'default' | 'price-asc' | 'price-desc' | 'newest'
-  const [homePage, setHomePage] = useState(1) // pagination page for discover
+  const [sortBy, setSortBy] = useState('default')
+  const [homePage, setHomePage] = useState(1)
   const [savedSearch, setSavedSearch] = useState('')
   const [savedRegion, setSavedRegion] = useState('All regions')
   const [savedCategory, setSavedCategory] = useState('All categories')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('All')
   const [showNotifications, setShowNotifications] = useState(false)
+  // Messaging state
+  const [openMessageAppId, setOpenMessageAppId] = useState(null)
+  const [messageThreads, setMessageThreads] = useState({}) // { [appId]: Message[] }
+  const [newMessageText, setNewMessageText] = useState('')
+  const [messageSending, setMessageSending] = useState(false)
+  // Rating state
+  const [ratingModal, setRatingModal] = useState(null) // { homeId, homeName, existing }
+  const [ratingStars, setRatingStars] = useState(0)
+  const [ratingReview, setRatingReview] = useState('')
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -565,6 +574,42 @@ function App() {
     else showToast('Super-admin details are managed by the system.')
   }
 
+  const loadMessages = async (appId) => {
+    if (!authUser?.token) return
+    const msgs = await fetchMessages(appId, authUser.token).catch(() => [])
+    setMessageThreads(prev => ({ ...prev, [appId]: msgs }))
+  }
+
+  const handleSendMessage = async (appId) => {
+    if (!newMessageText.trim() || messageSending) return
+    setMessageSending(true)
+    try {
+      await sendMessage(appId, newMessageText, authUser.token)
+      setNewMessageText('')
+      await loadMessages(appId)
+    } catch (err) { showToast(err.message) }
+    finally { setMessageSending(false) }
+  }
+
+  const openRatingModal = async (application) => {
+    const existing = await fetchMyRating(application.home_id, authUser.token).catch(() => null)
+    setRatingStars(existing?.stars || 0)
+    setRatingReview(existing?.review || '')
+    setRatingModal({ homeId: application.home_id, homeName: application.name, existing })
+  }
+
+  const submitHomeRating = async () => {
+    if (!ratingStars) { showToast('Please select a star rating.'); return }
+    try {
+      await submitRating(ratingModal.homeId, ratingStars, ratingReview, authUser.token)
+      setRatingModal(null)
+      showToast('Rating saved. Thank you!')
+      // Refresh homes so the rating shows on cards
+      fetchHomes({}, false, applications.filter(a => a.status === 'approved' && a.home_id).map(a => a.home_id))
+        .then(setHomes).catch(() => {})
+    } catch (err) { showToast(err.message) }
+  }
+
   // Notifications: tenant application updates + 72h payment alerts
   const notifications = useMemo(() => {
     const notes = []
@@ -597,7 +642,7 @@ function App() {
     const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
     return matchesRegion && matchesCategory && searchable.includes(savedSearch.toLowerCase())
   }), [homes, saved, savedRegion, savedCategory, savedSearch])
-  const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex="0" onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div><span className="rating">★ 4.9</span></div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
+  const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex="0" onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div>{home.rating ? <span className="rating">★ {home.rating}</span> : null}</div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
 
   if (showAuthScreen) {
     return <AuthScreen accounts={accounts} onLogin={login} onCreateAccount={createAccount} onBrowseHomes={() => setShowAuthScreen(false)} />
@@ -824,6 +869,27 @@ function App() {
                             </button>
                           )}
                           {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
+                          {/* Message button — always visible for active applications */}
+                          {['submitted', 'approved'].includes(application.status) && (
+                            <button style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                              onClick={async () => {
+                                if (openMessageAppId === application.id) {
+                                  setOpenMessageAppId(null)
+                                } else {
+                                  setOpenMessageAppId(application.id)
+                                  await loadMessages(application.id)
+                                }
+                              }}>
+                              💬 {openMessageAppId === application.id ? 'Close messages' : 'Messages'}
+                            </button>
+                          )}
+                          {/* Rate button — only for approved applications */}
+                          {application.status === 'approved' && application.payment_status === 'paid' && (
+                            <button style={{ border: 0, background: 'none', color: '#d59a54', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                              onClick={() => openRatingModal(application)}>
+                              ★ Rate this home
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -836,6 +902,83 @@ function App() {
           </div>
           </>}
         </>}
+
+      {/* Message thread panel */}
+      {openMessageAppId && (
+        <div style={{ position: 'fixed', bottom: 0, right: 0, width: '100%', maxWidth: '420px', background: '#fff', borderTop: '1px solid #e7ede8', borderLeft: '1px solid #e7ede8', boxShadow: '0 -4px 24px rgba(0,0,0,.12)', zIndex: 90, display: 'flex', flexDirection: 'column', maxHeight: '420px' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e7ede8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#173d36' }}>
+            <strong style={{ color: '#fff', fontSize: '13px' }}>💬 Messages</strong>
+            <button onClick={() => setOpenMessageAppId(null)} style={{ border: 'none', background: 'none', color: '#a9c4bb', cursor: 'pointer', fontSize: '18px' }}>×</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {(messageThreads[openMessageAppId] || []).length === 0
+              ? <p style={{ fontSize: '12px', color: '#9aa49e', textAlign: 'center', margin: 'auto' }}>No messages yet. Send a message to start the conversation.</p>
+              : (messageThreads[openMessageAppId] || []).map(msg => {
+                  const isMe = msg.sender_id === authUser?.id
+                  return (
+                    <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                      <div style={{ fontSize: '9px', color: '#9aa49e', marginBottom: '3px', textAlign: isMe ? 'right' : 'left' }}>
+                        {msg.sender_name} · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      <div style={{ background: isMe ? '#173d36' : '#f6f9f5', color: isMe ? '#fff' : '#1d3d33', padding: '9px 13px', borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px', fontSize: '12px', lineHeight: 1.5 }}>
+                        {msg.body}
+                      </div>
+                    </div>
+                  )
+                })
+            }
+          </div>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #e7ede8', display: 'flex', gap: '8px' }}>
+            <input
+              value={newMessageText}
+              onChange={e => setNewMessageText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendMessage(openMessageAppId)}
+              placeholder="Type a message..."
+              style={{ flex: 1, border: '1px solid #dce4dd', borderRadius: '20px', padding: '9px 14px', fontSize: '12px', outline: 'none' }}
+            />
+            <button
+              onClick={() => handleSendMessage(openMessageAppId)}
+              disabled={messageSending || !newMessageText.trim()}
+              style={{ background: '#173d36', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '16px', cursor: 'pointer', flexShrink: 0, opacity: messageSending || !newMessageText.trim() ? 0.5 : 1 }}>
+              ↑
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rating modal */}
+      {ratingModal && (
+        <div className="modal-backdrop" onClick={() => setRatingModal(null)}>
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '380px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 6px', color: '#173d36', font: '400 20px Georgia,serif' }}>Rate this home</h3>
+            <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#718078' }}>{ratingModal.homeName}</p>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', justifyContent: 'center' }}>
+              {[1,2,3,4,5].map(s => (
+                <button key={s} onClick={() => setRatingStars(s)}
+                  style={{ background: 'none', border: 'none', fontSize: '32px', cursor: 'pointer', color: s <= ratingStars ? '#d59a54' : '#e7ede8', lineHeight: 1 }}>
+                  ★
+                </button>
+              ))}
+            </div>
+            <label style={{ display: 'block', marginBottom: '16px' }}>
+              <span style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#476055', marginBottom: '7px' }}>Write a review (optional)</span>
+              <textarea value={ratingReview} onChange={e => setRatingReview(e.target.value)}
+                placeholder="Share your experience living in this home..."
+                style={{ width: '100%', minHeight: '80px', border: '1px solid #dce4dd', borderRadius: '5px', padding: '11px', fontSize: '12px', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            </label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={submitHomeRating}
+                style={{ flex: 1, padding: '12px', background: '#173d36', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                {ratingModal.existing ? 'Update rating' : 'Submit rating'}
+              </button>
+              <button onClick={() => setRatingModal(null)}
+                style={{ padding: '12px 18px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
         {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : 'profile'} />}
 

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 import { KENYA_REGIONS } from './App'
 
@@ -61,6 +61,10 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [contractConfirm, setContractConfirm] = useState(null) // application to confirm sending
   const [paymentAlerts, setPaymentAlerts] = useState([]) // applications past 72h deadline unpaid
   const [approveConfirm, setApproveConfirm] = useState(null) // { application, otherApplicants[] }
+  const [agentMessages, setAgentMessages] = useState([])
+  const [agentMsgText, setAgentMsgText] = useState('')
+  const [agentMsgSending, setAgentMsgSending] = useState(false)
+  const msgEndRef = useRef(null)
   const [contractForm, setContractForm] = useState({
     tenantName: '',
     tenantId: '',
@@ -293,15 +297,33 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       setTenantProfile(tenantProf)
       setSelectedTenant(application.tenant_id)
       setSelectedApplication(application)
+      // Load message thread for this application
+      const msgs = await fetchMessages(application.id, token).catch(() => [])
+      setAgentMessages(msgs)
     } catch (error) {
       onNotify(error.message)
     }
+  }
+
+  const sendAgentMessage = async () => {
+    if (!agentMsgText.trim() || agentMsgSending || !selectedApplication) return
+    setAgentMsgSending(true)
+    try {
+      await sendMessage(selectedApplication.id, agentMsgText, token)
+      setAgentMsgText('')
+      const msgs = await fetchMessages(selectedApplication.id, token)
+      setAgentMessages(msgs)
+      setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    } catch (err) { onNotify(err.message) }
+    finally { setAgentMsgSending(false) }
   }
 
   const closeApplicationDetail = () => {
     setSelectedApplication(null)
     setTenantProfile(null)
     setSelectedTenant(null)
+    setAgentMessages([])
+    setAgentMsgText('')
   }
 
   const sendContractByEmail = (application) => {
@@ -618,6 +640,43 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               <div className="app-detail-field"><span>Deposit</span><strong>{formatKes(selectedApplication.deposit)}</strong></div>
               <div className="app-detail-field"><span>Applied on</span><strong>{new Date(selectedApplication.created_at).toLocaleDateString()}</strong></div>
               {selectedApplication.tenant_message && <div className="app-detail-field"><span>Tenant message</span><strong style={{ fontWeight: 400, lineHeight: 1.5, display: 'block' }}>{selectedApplication.tenant_message}</strong></div>}
+            </div>
+          </div>
+
+          {/* Message thread */}
+          <div className="app-detail-card" style={{ marginTop: '0', gridColumn: '1 / -1' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: 700, color: '#3c5e4f', textTransform: 'uppercase', letterSpacing: '.06em' }}>Messages</h3>
+            <div style={{ minHeight: '80px', maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px', padding: '4px 0' }}>
+              {agentMessages.length === 0
+                ? <p style={{ fontSize: '12px', color: '#9aa49e', margin: 'auto', textAlign: 'center' }}>No messages yet. Start the conversation below.</p>
+                : agentMessages.map(msg => {
+                    const isAgent = msg.sender_role === 'Agent' || msg.sender_role === 'SuperAdmin'
+                    return (
+                      <div key={msg.id} style={{ alignSelf: isAgent ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+                        <div style={{ fontSize: '9px', color: '#9aa49e', marginBottom: '3px', textAlign: isAgent ? 'right' : 'left' }}>
+                          {msg.sender_name} · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div style={{ background: isAgent ? '#173d36' : '#f6f9f5', color: isAgent ? '#fff' : '#1d3d33', padding: '9px 13px', borderRadius: isAgent ? '14px 14px 4px 14px' : '14px 14px 14px 4px', fontSize: '12px', lineHeight: 1.5 }}>
+                          {msg.body}
+                        </div>
+                      </div>
+                    )
+                  })
+              }
+              <div ref={msgEndRef} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                value={agentMsgText}
+                onChange={e => setAgentMsgText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendAgentMessage()}
+                placeholder="Type a message to the tenant..."
+                style={{ flex: 1, border: '1px solid #dce4dd', borderRadius: '20px', padding: '9px 14px', fontSize: '12px', outline: 'none' }}
+              />
+              <button onClick={sendAgentMessage} disabled={agentMsgSending || !agentMsgText.trim()}
+                style={{ background: '#173d36', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '16px', cursor: 'pointer', flexShrink: 0, opacity: agentMsgSending || !agentMsgText.trim() ? 0.5 : 1 }}>
+                ↑
+              </button>
             </div>
           </div>
 
