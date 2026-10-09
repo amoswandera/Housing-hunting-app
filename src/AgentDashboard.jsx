@@ -193,7 +193,33 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   }
 
   const toggleAvailability = async (home) => {
-    try { await updateHomeAvailability(home.id, !home.available, token); await loadData(); onNotify(home.available ? 'Home marked as taken.' : 'Home marked as available.') } catch (error) { onNotify(error.message) }
+    try {
+      if (!home.available) {
+        // Marking as taken — straightforward
+        await updateHomeAvailability(home.id, false, token)
+        await loadData()
+        onNotify('Home marked as taken.')
+        return
+      }
+      // Marking as available — check for any existing approved application
+      const approvedApp = applications.find(
+        a => a.home_id === home.id && a.status === 'approved'
+      )
+      if (approvedApp) {
+        const revert = window.confirm(
+          `"${home.name}" has an approved application for ${approvedApp.tenant_name || 'a tenant'}.\n\nTo re-list this home, that application will be reverted to "submitted" so the tenant can reapply.\n\nDo you want to continue?`
+        )
+        if (!revert) return
+        // Revert the application and relist
+        await returnHomeToAvailable(approvedApp.id, home.id, token)
+        await loadData()
+        onNotify(`${home.name} is available again. ${approvedApp.tenant_name || 'The tenant'}'s application has been reverted.`)
+      } else {
+        await updateHomeAvailability(home.id, true, token)
+        await loadData()
+        onNotify('Home marked as available.')
+      }
+    } catch (error) { onNotify(error.message) }
   }
 
   const review = async (application, status) => {

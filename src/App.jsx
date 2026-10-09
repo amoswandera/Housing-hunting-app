@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resetPassword, returnHomeToAvailable, submitApplication, transferAgentHomes, updatePassword, updateProfile } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMyApplications, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, submitApplication, transferAgentHomes, updatePassword, updateProfile } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -238,6 +238,7 @@ function App() {
   const [selectedAgentProfile, setSelectedAgentProfile] = useState(null)
   const [openFaqIndex, setOpenFaqIndex] = useState(null)
   const [applyConfirm, setApplyConfirm] = useState(null) // home to confirm application for
+  const [applyMessage, setApplyMessage] = useState('') // tenant's custom message
   const [priceRange, setPriceRange] = useState('All prices')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('All')
 
@@ -405,17 +406,29 @@ function App() {
       setShowAuthScreen(true)
       return
     }
+    // Profile gate: require at least a phone number before applying
+    if (!tenantProfile.phone?.trim()) {
+      showToast('Please add your phone number to your profile before applying.')
+      setShowTenantProfile(true)
+      setActiveView('profile')
+      setSelectedHome(null)
+      setCurrentImageIndex(0)
+      return
+    }
     // Show confirmation modal before submitting
+    setApplyMessage('')
     setApplyConfirm(selectedHome)
   }
 
   const submitBooking = async () => {
     const home = applyConfirm
+    const message = applyMessage.trim() || 'I would like to apply for this home.'
     setApplyConfirm(null)
+    setApplyMessage('')
     setSelectedHome(null)
     setCurrentImageIndex(0)
     try {
-      await submitApplication(home.id, 'I would like to apply for this home.', authUser.token)
+      await submitApplication(home.id, message, authUser.token)
       const updatedApplications = await fetchMyApplications(authUser.token)
       setApplications(updatedApplications)
       setBooked((current) => [...new Set([...current, home.id])])
@@ -836,22 +849,31 @@ function App() {
       )}
       {applyConfirm && (
         <div className="modal-backdrop" onClick={() => setApplyConfirm(null)}>
-          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '420px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '32px', maxWidth: '440px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 10px', color: '#173d36', font: '400 22px Georgia,serif' }}>Send Application</h3>
-            <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 20px' }}>
-              Are you sure you want to apply for:
+            <p style={{ fontSize: '13px', color: '#718078', lineHeight: 1.6, margin: '0 0 16px' }}>
+              You are applying for:
             </p>
-            <div style={{ background: '#f6f9f5', borderRadius: '7px', padding: '14px 18px', marginBottom: '24px' }}>
+            <div style={{ background: '#f6f9f5', borderRadius: '7px', padding: '14px 18px', marginBottom: '20px' }}>
               <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '14px' }}>{applyConfirm.name}</div>
               <div style={{ color: '#718078', fontSize: '12px', marginTop: '4px' }}>{applyConfirm.location} · {formatKes(applyConfirm.price)}/mo</div>
               <div style={{ color: '#3e735e', fontSize: '12px', marginTop: '2px' }}>Agent: {applyConfirm.agent_name || 'House agent'}</div>
             </div>
+            <label style={{ display: 'block', marginBottom: '20px' }}>
+              <span style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#476055', marginBottom: '7px' }}>Message to agent (optional)</span>
+              <textarea
+                value={applyMessage}
+                onChange={e => setApplyMessage(e.target.value)}
+                placeholder="Introduce yourself — mention your occupation, move-in date, number of occupants, or anything relevant..."
+                style={{ width: '100%', minHeight: '90px', border: '1px solid #dce4dd', borderRadius: '5px', padding: '11px', fontSize: '12px', color: '#29433a', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+              />
+            </label>
             <small style={{ display: 'block', color: '#9aa49e', fontSize: '11px', marginBottom: '20px', textAlign: 'center' }}>No payment is taken now. The agent reviews your application first.</small>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={submitBooking} style={{ flex: 1, padding: '13px', background: '#173d36', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
                 Send Application →
               </button>
-              <button onClick={() => setApplyConfirm(null)} style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>
+              <button onClick={() => { setApplyConfirm(null); setApplyMessage('') }} style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>
                 Cancel
               </button>
             </div>
@@ -1134,6 +1156,21 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
             )}
 
             {error && <p className="auth-error">{error}</p>}
+            {error && error.includes('verify your email') && (
+              <button type="button" style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '11px', fontWeight: 700, display: 'block', margin: '-6px auto 8px', cursor: 'pointer' }}
+                onClick={async () => {
+                  if (!identifier.trim()) { setError('Enter your email address first.'); return }
+                  try {
+                    await resendVerificationEmail(identifier.trim())
+                    setSuccess('Verification email resent. Check your inbox.')
+                    setError('')
+                  } catch (err) {
+                    setError(err.message)
+                  }
+                }}>
+                Resend verification email →
+              </button>
+            )}
             {success && <p className="auth-success">{success}</p>}
 
             <button className="auth-submit" type="submit">

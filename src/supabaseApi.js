@@ -159,6 +159,16 @@ export const resetPassword = async (email) => {
   return { ok: true }
 }
 
+export const resendVerificationEmail = async (email) => {
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  })
+  handleSupabaseError(error)
+  return { ok: true }
+}
+
 export const updatePassword = async (newPassword, token) => {
   const { error } = await supabase.auth.updateUser({
     password: newPassword,
