@@ -4,6 +4,57 @@ import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminU
 import { supabase } from './supabaseClient'
 import './App.css'
 
+// All Kenyan counties/regions available as listing locations
+export const KENYA_REGIONS = [
+  'Nairobi County',
+  'Mombasa County',
+  'Kisumu County',
+  'Nakuru County',
+  'Kiambu County',
+  'Machakos County',
+  'Kajiado County',
+  'Uasin Gishu County',
+  'Meru County',
+  'Kilifi County',
+  'Kwale County',
+  'Nyeri County',
+  'Murang\'a County',
+  'Kirinyaga County',
+  'Nyandarua County',
+  'Laikipia County',
+  'Samburu County',
+  'Trans Nzoia County',
+  'West Pokot County',
+  'Elgeyo Marakwet County',
+  'Nandi County',
+  'Baringo County',
+  'Kericho County',
+  'Bomet County',
+  'Kakamega County',
+  'Vihiga County',
+  'Bungoma County',
+  'Busia County',
+  'Siaya County',
+  'Homabay County',
+  'Migori County',
+  'Kisii County',
+  'Nyamira County',
+  'Narok County',
+  'Makueni County',
+  'Kitui County',
+  'Embu County',
+  'Tharaka Nithi County',
+  'Isiolo County',
+  'Marsabit County',
+  'Mandera County',
+  'Wajir County',
+  'Garissa County',
+  'Tana River County',
+  'Lamu County',
+  'Taita Taveta County',
+  'Turkana County',
+]
+
 const initialHomes = [
   {
     id: 1,
@@ -653,7 +704,7 @@ function App() {
           )}
           {activeView === 'discover' && !showTenantProfile && <>
           <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
-          <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); setHomePage(1) }} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => { setRegion(event.target.value); setHomePage(1) }}><option>All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => { setCategory(event.target.value); setHomePage(1) }}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => { setPriceRange(event.target.value); setHomePage(1) }}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><div className="select-field category-select"><span>⇅</span><select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setHomePage(1) }}><option value="default">Default order</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="newest">Newest first</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
+          <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); setHomePage(1) }} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => { setRegion(event.target.value); setHomePage(1) }}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => { setCategory(event.target.value); setHomePage(1) }}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => { setPriceRange(event.target.value); setHomePage(1) }}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><div className="select-field category-select"><span>⇅</span><select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setHomePage(1) }}><option value="default">Default order</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="newest">Newest first</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
           <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available home{filteredHomes.length !== 1 ? 's' : ''}</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
           <section className="home-grid">{filteredHomes.slice(0, homePage * PAGE_SIZE).map(renderHomeCard)}</section>
           {filteredHomes.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
@@ -670,7 +721,7 @@ function App() {
           <div className="content-heading"><div><h2>Saved homes</h2><p>{savedHomes.length} home{savedHomes.length === 1 ? '' : 's'} saved</p></div></div>
           <div className="users-toolbar" style={{ margin: '0 0 20px' }}>
             <div className="search-field admin-user-search"><span>⌕</span><input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} placeholder="Search saved homes" /></div>
-            <select className="role-filter" value={savedRegion} onChange={e => setSavedRegion(e.target.value)}><option value="All regions">All regions</option><option>Nairobi County</option><option>Mombasa County</option><option>Kisumu County</option><option>Nakuru County</option></select>
+            <select className="role-filter" value={savedRegion} onChange={e => setSavedRegion(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
             <select className="role-filter" value={savedCategory} onChange={e => setSavedCategory(e.target.value)}><option value="All categories">All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select>
           </div>
           {savedHomes.length > 0 ? <section className="home-grid">{savedHomes.map(renderHomeCard)}</section> : <div className="empty-state"><strong>{saved.length > 0 ? 'No saved homes match your filter' : 'No saved homes yet'}</strong><span>{saved.length > 0 ? 'Try clearing the search or filters.' : 'Tap the heart on any home to save it here.'}</span></div>}
@@ -1555,11 +1606,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                   aria-label="Filter homes by region"
                 >
                   <option value="All regions">All regions</option>
-                  <option value="Nairobi County">Nairobi County</option>
-                  <option value="Mombasa County">Mombasa County</option>
-                  <option value="Kisumu County">Kisumu County</option>
-                  <option value="Nakuru County">Nakuru County</option>
-                  <option value="Kiambu County">Kiambu County</option>
+                  {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <select
                   className="role-filter"
@@ -1672,11 +1719,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                   aria-label="Filter applications by region"
                 >
                   <option value="All regions">All regions</option>
-                  <option value="Nairobi County">Nairobi County</option>
-                  <option value="Mombasa County">Mombasa County</option>
-                  <option value="Kisumu County">Kisumu County</option>
-                  <option value="Nakuru County">Nakuru County</option>
-                  <option value="Kiambu County">Kiambu County</option>
+                  {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <select
                   className="role-filter"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { fetchAgentApplications, fetchManagedHomes, fetchProfile, fetchTenantProfile, reviewApplication, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
+import { KENYA_REGIONS } from './App'
 
 const formatKes = (amount) => `KES ${Number(amount).toLocaleString('en-KE')}`
 
@@ -650,13 +651,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             <label>Home name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. The Willow House" /></label>
             <label>Location<input required value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="e.g. Kitisuru, Nairobi" /></label>
             <label>Region<select required value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })}>
-              <option value="Nairobi County">Nairobi County</option>
-              <option value="Mombasa County">Mombasa County</option>
-              <option value="Kisumu County">Kisumu County</option>
-              <option value="Nakuru County">Nakuru County</option>
-              <option value="Kiambu County">Kiambu County</option>
-              <option value="Machakos County">Machakos County</option>
-              <option value="Kajiado County">Kajiado County</option>
+              {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
               <option value="Other">Other (specify below)</option>
             </select></label>
             {form.region === 'Other' && <label>Custom region<input required value={form.customRegion || ''} onChange={(event) => setForm({ ...form, customRegion: event.target.value })} placeholder="Enter region name" /></label>}
@@ -720,11 +715,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               aria-label="Filter homes by region"
             >
               <option value="All regions">All regions</option>
-              <option value="Nairobi County">Nairobi County</option>
-              <option value="Mombasa County">Mombasa County</option>
-              <option value="Kisumu County">Kisumu County</option>
-              <option value="Nakuru County">Nakuru County</option>
-              <option value="Kiambu County">Kiambu County</option>
+              {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
             <select
               className="role-filter"
@@ -841,11 +832,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               aria-label="Filter applications by region"
             >
               <option value="All regions">All regions</option>
-              <option value="Nairobi County">Nairobi County</option>
-              <option value="Mombasa County">Mombasa County</option>
-              <option value="Kisumu County">Kisumu County</option>
-              <option value="Nakuru County">Nakuru County</option>
-              <option value="Kiambu County">Kiambu County</option>
+              {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
             <select
               className="role-filter"
