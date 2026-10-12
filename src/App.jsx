@@ -745,7 +745,7 @@ function App() {
     const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
     return matchesRegion && matchesCategory && searchable.includes(savedSearch.toLowerCase())
   }), [homes, saved, savedRegion, savedCategory, savedSearch])
-  const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex={0} onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div>{home.rating ? <span className="rating">★ {home.rating}</span> : null}</div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
+  const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex={0} onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image || ''} alt={`${home.name} interior`} onError={(e) => { console.error('Home card image failed to load:', home.image) }} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div>{home.rating ? <span className="rating">★ {home.rating}</span> : null}</div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
 
   const renderBuildingCard = (building) => {
     // Use building images if available, otherwise fall back to first unit image
@@ -765,7 +765,14 @@ function App() {
           onClick={() => openBuildingUnits(building)}
           onKeyDown={(event) => event.key === 'Enter' && openBuildingUnits(building)}
         >
-          <img src={primaryImage} alt={`${building.name} exterior`} />
+          <img 
+            src={primaryImage || ''} 
+            alt={`${building.name} exterior`}
+            onError={(e) => {
+              console.error('Building image failed to load:', primaryImage)
+              e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
+            }}
+          />
           <span className="home-tag">{building.availableUnits} units available</span>
           <span className="photo-hint">View units ↗</span>
         </div>
@@ -1244,45 +1251,58 @@ function App() {
             </div>
             {/* Image Gallery */}
             <div className="image-gallery-container">
-              <img 
-                className="modal-home-image" 
-                src={selectedHome.images && selectedHome.images.length > 0 
+              {(() => {
+                const hasImages = selectedHome.images && selectedHome.images.length > 0
+                const imageUrl = hasImages
                   ? (selectedHome.images[currentImageIndex]?.url || selectedHome.images[0]?.url)
-                  : selectedHome.image} 
-                alt={`${selectedHome.name} interior`} 
-              />
-              {/* Image Navigation */}
-              {selectedHome.images && selectedHome.images.length > 1 && (
-                <>
-                  <button 
-                    className="gallery-nav-btn gallery-prev-btn"
-                    onClick={() => setCurrentImageIndex((prev) => prev === 0 ? selectedHome.images.length - 1 : prev - 1)}
-                  >
-                    ‹
-                  </button>
-                  <button 
-                    className="gallery-nav-btn gallery-next-btn"
-                    onClick={() => setCurrentImageIndex((prev) => (prev + 1) % selectedHome.images.length)}
-                  >
-                    ›
-                  </button>
-                  {/* Thumbnails */}
-                  <div className="gallery-thumbnails">
-                    {selectedHome.images.map((img, index) => (
-                      <img
-                        key={index}
-                        src={img.url}
-                        alt={`Thumbnail ${index + 1}`}
-                        className={`gallery-thumbnail ${index === currentImageIndex ? 'active' : ''}`}
-                        onClick={() => setCurrentImageIndex(index)}
-                      />
-                    ))}
-                  </div>
-                  <div className="gallery-counter">
-                    {currentImageIndex + 1} / {selectedHome.images.length}
-                  </div>
-                </>
-              )}
+                  : selectedHome.image
+                
+                return (
+                  <>
+                    <img 
+                      className="modal-home-image" 
+                      src={imageUrl || ''}
+                      alt={`${selectedHome.name} interior`}
+                      onError={(e) => {
+                        console.error('Image failed to load:', imageUrl)
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
+                      }}
+                    />
+                    {/* Image Navigation */}
+                    {hasImages && selectedHome.images.length > 1 && (
+                      <>
+                        <button 
+                          className="gallery-nav-btn gallery-prev-btn"
+                          onClick={() => setCurrentImageIndex((prev) => prev === 0 ? selectedHome.images.length - 1 : prev - 1)}
+                        >
+                          ‹
+                        </button>
+                        <button 
+                          className="gallery-nav-btn gallery-next-btn"
+                          onClick={() => setCurrentImageIndex((prev) => (prev + 1) % selectedHome.images.length)}
+                        >
+                          ›
+                        </button>
+                        {/* Thumbnails */}
+                        <div className="gallery-thumbnails">
+                          {selectedHome.images.map((img, index) => (
+                            <img
+                              key={index}
+                              src={img.url}
+                              alt={`Thumbnail ${index + 1}`}
+                              className={`gallery-thumbnail ${index === currentImageIndex ? 'active' : ''}`}
+                              onClick={() => setCurrentImageIndex(index)}
+                            />
+                          ))}
+                        </div>
+                        <div className="gallery-counter">
+                          {currentImageIndex + 1} / {selectedHome.images.length}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )
+              })()}
             </div>
             <div className="modal-content">
               <p className="eyebrow">{selectedHome.location}</p>
@@ -1449,6 +1469,9 @@ function App() {
                     }
                     
                     const unitImage = finalImages.find(i => i.is_primary)?.url || finalImages[0]?.url || ''
+                    
+                    // Debug logging
+                    console.log('Unit data:', { unit, unitImages, buildingImgs, finalImages, unitImage })
                     
                     // Prepare unit object with proper image data for the modal
                     const unitForModal = {
