@@ -564,48 +564,76 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         </div>
       ))}
 
-      {/* Internal navigation for switching views */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => { setInternalView('dashboard'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
-          style={{
-            padding: '10px 20px', borderRadius: '8px', border: internalView === 'dashboard' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
-            ':hover': { background: '#f9fafb' }
-          }}
-        >
-          📊 Dashboard
-        </button>
-        <button
-          onClick={() => { setInternalView('homes'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
-          style={{
-            padding: '10px 20px', borderRadius: '8px', border: internalView === 'homes' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
-            ':hover': { background: '#f9fafb' }
-          }}
-        >
-          🏠 Homes
-        </button>
-        <button
-          onClick={() => { setInternalView('applications'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
-          style={{
-            padding: '10px 20px', borderRadius: '8px', border: internalView === 'applications' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
-            ':hover': { background: '#f9fafb' }
-          }}
-        >
-          📋 Applications
-        </button>
-        <button
-          onClick={() => { setInternalView('buildings'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
-          style={{
-            padding: '10px 20px', borderRadius: '8px', border: internalView === 'buildings' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
-            ':hover': { background: '#f9fafb' }
-          }}
-        >
-          🏢 Buildings
-        </button>
-      </div>
-
       {/* Dashboard View - Card Display */}
       {internalView === 'dashboard' && !showProfile && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+          {/* Homes Card */}
+          <div
+            onClick={() => { setInternalView('homes'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Homes</h3>
+            <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Manage your property listings</p>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{homes.length}</div>
+            <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total homes</p>
+          </div>
+
+          {/* Applications Card */}
+          <div
+            onClick={() => { setInternalView('applications'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Applications</h3>
+            <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Review tenant applications</p>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{applications.length}</div>
+            <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total applications</p>
+          </div>
+
+          {/* Buildings Card */}
+          <div
+            onClick={() => { setInternalView('buildings'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Buildings</h3>
+            <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Manage multi-unit buildings</p>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{buildings.length}</div>
+            <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total buildings</p>
+          </div>
+        </div>
+      )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
           {/* Homes Card */}
           <div

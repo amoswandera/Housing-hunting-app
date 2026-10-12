@@ -281,7 +281,7 @@ function App() {
   const [paymentPhone, setPaymentPhone] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [showTenantProfile, setShowTenantProfile] = useState(false)
-  const [activeView, setActiveView] = useState(storedUser?.role === 'Tenant' ? 'discover' : storedUser?.role === 'SuperAdmin' ? 'agent-dashboard' : storedUser?.role === 'Agent' ? 'agent-homes' : 'discover')
+  const [activeView, setActiveView] = useState(storedUser?.role === 'Tenant' ? 'discover' : storedUser?.role === 'SuperAdmin' ? 'agent-dashboard' : storedUser?.role === 'Agent' ? 'agent-dashboard' : 'discover')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [agentProfileNonce, setAgentProfileNonce] = useState(0)
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
@@ -778,8 +778,10 @@ function App() {
           {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && (
             <>
               {authUser?.role === 'SuperAdmin' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
+              {authUser?.role === 'Agent' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
               <button className={`nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}><span>⌂</span> Homes</button>
               <button className={`nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}><span>📋</span> Applications</button>
+              {authUser?.role === 'Agent' && <button className={`nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { setActiveView('agent-buildings'); setMobileMenuOpen(false) }}><span>🏢</span> Buildings</button>}
             </>
           )}
           {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' || showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
@@ -1129,7 +1131,7 @@ function App() {
         </div>
       )}
 
-        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : 'profile'} />}
+        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} />}
 
         {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => setActiveView('agent-dashboard')} />}
       </main>
@@ -1159,6 +1161,35 @@ function App() {
           </button>
           <button className={`mobile-nav-item ${showTenantProfile ? 'active' : ''}`} onClick={() => { setShowTenantProfile(true); setActiveView('profile'); setMobileMenuOpen(false) }}>
             <span>♙</span> Profile
+          </button>
+        </nav>
+      )}
+      {authUser?.role === 'Agent' && (
+        <nav className="mobile-bottom-nav">
+          <button className={`mobile-nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}>
+            <span>◈</span> Dashboard
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}>
+            <span>⌂</span> Homes
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}>
+            <span>📋</span> Applications
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { setActiveView('agent-buildings'); setMobileMenuOpen(false) }}>
+            <span>🏢</span> Buildings
+          </button>
+        </nav>
+      )}
+      {authUser?.role === 'SuperAdmin' && (
+        <nav className="mobile-bottom-nav">
+          <button className={`mobile-nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}>
+            <span>◈</span> Dashboard
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}>
+            <span>⌂</span> Homes
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}>
+            <span>📋</span> Applications
           </button>
         </nav>
       )}
