@@ -1728,6 +1728,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [homeSearch, setHomeSearch] = useState('')
   const [homeRegionFilter, setHomeRegionFilter] = useState('All regions')
   const [homeCategoryFilter, setHomeCategoryFilter] = useState('All categories')
+  const [homeStatusFilter, setHomeStatusFilter] = useState('All') // 'All', 'Available', 'Taken'
   const [applicationSearch, setApplicationSearch] = useState('')
   const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
@@ -1848,7 +1849,10 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       (home.agent_name || '').toLowerCase().includes(search)
     const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
     const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
-    return matchesSearch && matchesRegion && matchesCategory
+    const matchesStatus = homeStatusFilter === 'All' ||
+      (homeStatusFilter === 'Available' && home.available) ||
+      (homeStatusFilter === 'Taken' && !home.available)
+    return matchesSearch && matchesRegion && matchesCategory && matchesStatus
   })
 
   const stats = [
@@ -2011,6 +2015,16 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                   <option value="Two bedroom">Two bedroom</option>
                   <option value="Three bedroom">Three bedroom</option>
                   <option value="Four bedroom">Four bedroom</option>
+                </select>
+                <select
+                  className="role-filter"
+                  value={homeStatusFilter}
+                  onChange={(event) => setHomeStatusFilter(event.target.value)}
+                  aria-label="Filter homes by status"
+                >
+                  <option value="All">All status</option>
+                  <option value="Available">Available</option>
+                  <option value="Taken">Taken</option>
                 </select>
               </div>
               <div className="users-table-wrap">
