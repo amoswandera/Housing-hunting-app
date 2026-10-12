@@ -919,6 +919,96 @@ export const updateHome = async (id, homeData, imageFile, imageFiles, token) => 
   }
 }
 
+export const updateBuilding = async (id, buildingData, buildingImages, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const region = buildingData.region === 'Other' ? buildingData.customRegion : buildingData.region
+  if (!region) throw new Error('Please enter a region name.')
+
+  const amenities = buildingData.amenities ? buildingData.amenities.split(',').map(a => a.trim()) : []
+
+  const { data, error } = await supabase
+    .from('buildings')
+    .update({
+      name: buildingData.name,
+      location: buildingData.location,
+      region,
+      type: buildingData.type,
+      total_units: parseInt(buildingData.totalUnits),
+      description: buildingData.description,
+      amenities,
+    })
+    .eq('id', id)
+    .eq('agent_id', user.id)
+    .select()
+    .single()
+
+  handleSupabaseError(error)
+
+  // Handle building images
+  if (buildingImages && buildingImages.length > 0) {
+    for (let i = 0; i < buildingImages.length; i++) {
+      const img = buildingImages[i]
+      const imageUrl = img.file ? (await uploadHouseImage(img.file, token)).url : img.url
+
+      await supabase
+        .from('building_images')
+        .insert({
+          building_id: data.id,
+          image_url: imageUrl,
+          is_primary: i === 0,
+          order_index: i,
+        })
+    }
+  }
+
+  return data
+}
+
+export const updateUnit = async (id, unitData, unitImages, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data, error } = await supabase
+    .from('homes')
+    .update({
+      name: unitData.unitNumber,
+      unit_number: unitData.unitNumber,
+      floor: unitData.floor,
+      category: unitData.category,
+      price: parseFloat(unitData.price),
+      deposit: parseFloat(unitData.deposit),
+      details: unitData.description,
+      size_sqft: unitData.sizeSqft ? parseInt(unitData.sizeSqft) : null,
+    })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .select()
+    .single()
+
+  handleSupabaseError(error)
+
+  // Handle unit images
+  if (unitImages && unitImages.length > 0) {
+    for (let i = 0; i < unitImages.length; i++) {
+      const img = unitImages[i]
+      const imageUrl = img.file ? (await uploadHouseImage(img.file, token)).url : img.url
+
+      await supabase
+        .from('home_images')
+        .insert({
+          home_id: data.id,
+          image_url: imageUrl,
+          is_primary: i === 0,
+          order_index: i,
+        })
+    }
+  }
+
+  return data
+}
+
 // Applications functions
 export const submitApplication = async (homeId, message, token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)

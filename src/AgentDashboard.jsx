@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updateHome, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updateHome, updateBuilding, updateUnit, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 import { KENYA_REGIONS } from './App'
 
@@ -80,6 +80,8 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [editingHome, setEditingHome] = useState(null) // Home being edited
   const [editingBuilding, setEditingBuilding] = useState(null) // Building being edited
   const [editingUnit, setEditingUnit] = useState(null) // Unit being edited
+  const [showUnitsList, setShowUnitsList] = useState(false) // Show units list for a building
+  const [buildingUnits, setBuildingUnits] = useState([]) // Units for selected building
 
   // Navigation with history tracking
   const navigateTo = (view) => {
@@ -1717,7 +1719,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       )}
 
       {/* Buildings View */}
-      {internalView === 'buildings' && !showBuildingForm && !showAddUnitForm && (
+      {internalView === 'buildings' && !showBuildingForm && !showAddUnitForm && !showUnitsList && (
         <div className="table-panel">
           <div className="table-title">
             <h2>Your Buildings</h2>
@@ -1739,6 +1741,8 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
@@ -1768,10 +1772,28 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
                       <td style={{ padding: '12px' }}>
                         <button
+                          onClick={async () => { 
+                            setSelectedBuilding(building); 
+                            const units = await fetchUnitsInBuilding(building.id, token); 
+                            setBuildingUnits(units);
+                            setShowUnitsList(true);
+                            navigateTo('buildings');
+                          }}
+                          style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                        >
+                          View Units
+                        </button>
+                        <button
                           onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
                           style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
                         >
                           + Add Unit
+                        </button>
+                        <button
+                          onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
+                          style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          Edit
                         </button>
                       </td>
                     </tr>
@@ -1783,12 +1805,79 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         </div>
       )}
 
+      {/* Units List View */}
+      {showUnitsList && selectedBuilding && (
+        <div className="table-panel">
+          <div className="table-title">
+            <h2>Units in {selectedBuilding.name}</h2>
+            <span>{buildingUnits.length} unit{buildingUnits.length === 1 ? '' : 's'}</span>
+            <button onClick={() => { setShowUnitsList(false); setSelectedBuilding(null); navigateBack() }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+          </div>
+          {buildingUnits.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
+              <p style={{ fontSize: '16px', marginBottom: '8px' }}>No units yet</p>
+              <p style={{ fontSize: '14px' }}>Add units to this building to get started</p>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Unit Number</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Floor</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Category</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Price</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {buildingUnits.map((unit) => (
+                  <tr key={unit.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>{unit.unit_number}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{unit.floor}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{unit.category}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{formatKes(unit.price)}/mo</td>
+                    <td style={{ padding: '12px' }}>
+                      <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: unit.available ? '#10b981' : '#ef4444', color: 'white' }}>
+                        {unit.available ? 'Available' : 'Taken'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <button
+                        onClick={() => { 
+                          setEditingUnit(unit); 
+                          setUnitForm({ 
+                            unitNumber: unit.unit_number, 
+                            floor: unit.floor, 
+                            category: unit.category, 
+                            price: unit.price, 
+                            deposit: unit.deposit, 
+                            description: unit.details || '', 
+                            sizeSqft: unit.size_sqft || '' 
+                          }); 
+                          setShowAddUnitForm(true); 
+                          navigateTo('buildings');
+                        }}
+                        style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* Create Building Form */}
       {showBuildingForm && (
         <div className="table-panel">
           <div className="table-title">
-            <h2>Add New Building</h2>
-            <button onClick={() => setShowBuildingForm(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            <h2>{editingBuilding ? 'Edit Building' : 'Add New Building'}</h2>
+            <button onClick={() => { setShowBuildingForm(false); setEditingBuilding(null); navigateBack() }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
           </div>
           <form onSubmit={async (e) => {
             e.preventDefault()
@@ -1807,27 +1896,48 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 is_primary: index === 0
               }))
 
-              await createBuilding(
-                {
-                  name: buildingForm.name,
-                  location: buildingForm.location,
-                  region,
-                  type: buildingForm.type,
-                  totalUnits: parseInt(buildingForm.totalUnits),
-                  description: buildingForm.description,
-                  amenities
-                },
-                buildingImagesWithFiles,
-                categoryTemplates,
-                sessionToken
-              )
+              if (editingBuilding) {
+                // Update existing building
+                await updateBuilding(
+                  editingBuilding.id,
+                  {
+                    name: buildingForm.name,
+                    location: buildingForm.location,
+                    region,
+                    type: buildingForm.type,
+                    totalUnits: parseInt(buildingForm.totalUnits),
+                    description: buildingForm.description,
+                    amenities
+                  },
+                  buildingImagesWithFiles,
+                  sessionToken
+                )
+                onNotify('Building updated successfully.')
+                setEditingBuilding(null)
+              } else {
+                // Create new building
+                await createBuilding(
+                  {
+                    name: buildingForm.name,
+                    location: buildingForm.location,
+                    region,
+                    type: buildingForm.type,
+                    totalUnits: parseInt(buildingForm.totalUnits),
+                    description: buildingForm.description,
+                    amenities
+                  },
+                  buildingImagesWithFiles,
+                  categoryTemplates,
+                  sessionToken
+                )
+                onNotify('Building created successfully.')
+              }
 
               setBuildingForm({ name: '', location: '', region: 'Nairobi County', type: 'apartment', totalUnits: '', description: '', amenities: '', customRegion: '' })
               setBuildingImages([])
               setCategoryTemplates({})
               setShowBuildingForm(false)
               await loadData()
-              onNotify('Building created successfully.')
             } catch (error) { onNotify(error.message) }
           }} style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
             <label style={{ display: 'block' }}>
@@ -1924,9 +2034,9 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             </label>
             <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
               <button type="submit" style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
-                Create Building
+                {editingBuilding ? 'Update Building' : 'Create Building'}
               </button>
-              <button type="button" onClick={() => setShowBuildingForm(false)} style={{ padding: '12px 24px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+              <button type="button" onClick={() => { setShowBuildingForm(false); setEditingBuilding(null); navigateBack() }} style={{ padding: '12px 24px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
                 Cancel
               </button>
             </div>
@@ -1938,8 +2048,13 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       {showAddUnitForm && selectedBuilding && (
         <div className="table-panel">
           <div className="table-title">
-            <h2>Add Unit to {selectedBuilding.name}</h2>
-            <button onClick={() => setShowAddUnitForm(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            <h2>{editingUnit ? 'Edit Unit' : `Add Unit to ${selectedBuilding.name}`}</h2>
+            <button onClick={() => { setShowAddUnitForm(false); setEditingUnit(null); setSelectedBuilding(null); navigateBack() }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            {showUnitsList && (
+              <button onClick={() => { setShowAddUnitForm(false); setEditingUnit(null); setShowUnitsList(true) }} style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', marginLeft: 'auto' }}>
+              Back to Units
+            </button>
+            )}
           </div>
           <form onSubmit={async (e) => {
             e.preventDefault()
@@ -1952,27 +2067,55 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 is_primary: index === 0
               }))
 
-              await addUnitToBuilding(
-                selectedBuilding.id,
-                {
-                  unitNumber: unitForm.unitNumber,
-                  floor: unitForm.floor,
-                  category: unitForm.category,
-                  price: parseFloat(unitForm.price),
-                  deposit: parseFloat(unitForm.deposit),
-                  description: unitForm.description,
-                  sizeSqft: unitForm.sizeSqft
-                },
-                unitImagesWithFiles,
-                sessionToken
-              )
+              if (editingUnit) {
+                // Update existing unit
+                await updateUnit(
+                  editingUnit.id,
+                  {
+                    unitNumber: unitForm.unitNumber,
+                    floor: unitForm.floor,
+                    category: unitForm.category,
+                    price: parseFloat(unitForm.price),
+                    deposit: parseFloat(unitForm.deposit),
+                    description: unitForm.description,
+                    sizeSqft: unitForm.sizeSqft
+                  },
+                  unitImagesWithFiles,
+                  sessionToken
+                )
+                onNotify('Unit updated successfully.')
+                setEditingUnit(null)
+              } else {
+                // Add new unit
+                await addUnitToBuilding(
+                  selectedBuilding.id,
+                  {
+                    unitNumber: unitForm.unitNumber,
+                    floor: unitForm.floor,
+                    category: unitForm.category,
+                    price: parseFloat(unitForm.price),
+                    deposit: parseFloat(unitForm.deposit),
+                    description: unitForm.description,
+                    sizeSqft: unitForm.sizeSqft
+                  },
+                  unitImagesWithFiles,
+                  sessionToken
+                )
+                onNotify('Unit added successfully.')
+              }
 
               setUnitForm({ unitNumber: '', floor: '', category: '1BR', price: '', deposit: '', description: '', sizeSqft: '' })
               setUnitImages([])
               setShowAddUnitForm(false)
-              setSelectedBuilding(null)
+              if (showUnitsList) {
+                // Refresh units list
+                const units = await fetchUnitsInBuilding(selectedBuilding.id, sessionToken)
+                setBuildingUnits(units)
+                setShowUnitsList(true)
+              } else {
+                setSelectedBuilding(null)
+              }
               await loadData()
-              onNotify('Unit added successfully.')
             } catch (error) { onNotify(error.message) }
           }} style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
             <label style={{ display: 'block' }}>
@@ -2063,9 +2206,9 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             </label>
             <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
               <button type="submit" style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
-                Add Unit
+                {editingUnit ? 'Update Unit' : 'Add Unit'}
               </button>
-              <button type="button" onClick={() => setShowAddUnitForm(false)} style={{ padding: '12px 24px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+              <button type="button" onClick={() => { setShowAddUnitForm(false); setEditingUnit(null); setSelectedBuilding(null); navigateBack() }} style={{ padding: '12px 24px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
                 Cancel
               </button>
             </div>
