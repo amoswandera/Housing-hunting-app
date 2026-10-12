@@ -716,11 +716,12 @@ function App() {
                       {notifications.map(n => {
                         const isRead = readNotifications.has(n.id)
                         return (
-                        <li key={n.id} onClick={() => { setReadNotifications(prev => new Set([...prev, n.id])) }} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f0', fontSize: '12px', lineHeight: 1.5', color: isRead ? '#9aa49e' : n.type === 'warning' ? '#92400e' : n.type === 'success' ? '#1a5c3a' : '#4b5563', background: isRead ? '#fafafa' : n.type === 'warning' ? '#fff8ed' : n.type === 'success' ? '#f0faf4' : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ flex: 1 }}>{n.text}</span>
-                          {!isRead && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#df775d', flexShrink: 0 }}></span>}
-                        </li>
-                      )})}
+                          <li key={n.id} onClick={() => { setReadNotifications(prev => new Set([...prev, n.id])) }} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f0', fontSize: '12px', lineHeight: 1.5', color: isRead ? '#9aa49e' : n.type === 'warning' ? '#92400e' : n.type === 'success' ? '#1a5c3a' : '#4b5563', background: isRead ? '#fafafa' : n.type === 'warning' ? '#fff8ed' : n.type === 'success' ? '#f0faf4' : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ flex: 1 }}>{n.text}</span>
+                            {!isRead && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#df775d', flexShrink: 0 }}></span>}
+                          </li>
+                        )
+                      })}
                     </ul>
                   )}
                 </div>
