@@ -281,8 +281,32 @@ function App() {
   const [paymentPhone, setPaymentPhone] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [showTenantProfile, setShowTenantProfile] = useState(false)
-  const [activeView, setActiveView] = useState(storedUser?.role === 'Tenant' ? 'discover' : storedUser?.role === 'SuperAdmin' ? 'agent-dashboard' : storedUser?.role === 'Agent' ? 'agent-dashboard' : 'discover')
+  const [activeView, setActiveView] = useState(() => {
+    const savedView = localStorage.getItem('activeView')
+    const role = storedUser?.role
+    if (savedView && role) {
+      // Validate that the saved view is valid for the current role
+      if (role === 'Tenant' && ['discover', 'saved', 'bookings', 'profile'].includes(savedView)) {
+        return savedView
+      }
+      if (role === 'Agent' && ['agent-dashboard', 'agent-homes', 'agent-applications', 'agent-buildings', 'agent-profile'].includes(savedView)) {
+        return savedView
+      }
+      if (role === 'SuperAdmin' && ['agent-dashboard', 'agent-homes', 'agent-applications'].includes(savedView)) {
+        return savedView
+      }
+    }
+    // Default fallback
+    return role === 'Tenant' ? 'discover' : role === 'SuperAdmin' ? 'agent-dashboard' : role === 'Agent' ? 'agent-dashboard' : 'discover'
+  })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Persist activeView to localStorage
+  useEffect(() => {
+    if (activeView) {
+      localStorage.setItem('activeView', activeView)
+    }
+  }, [activeView])
   const [agentProfileNonce, setAgentProfileNonce] = useState(0)
   const [tenantProfile, setTenantProfile] = useState({ name: '', phone: '', nationalId: '', occupation: '', bio: '', company: '' })
   const [showAgentProfile, setShowAgentProfile] = useState(false)
@@ -451,6 +475,8 @@ function App() {
       .catch(() => {
         setAuthUser(null)
         setRole('Tenant')
+        localStorage.removeItem('activeView')
+        setActiveView('discover')
       })
   }, [authUser?.token])
 
@@ -606,6 +632,10 @@ function App() {
       const result = await loginUser(credentials)
       setAuthUser({ ...result.user, token: result.token, refreshToken: result.refreshToken })
       setRole(result.user.role)
+      // Set default view based on role on login
+      const defaultView = result.user.role === 'Tenant' ? 'discover' : result.user.role === 'SuperAdmin' ? 'agent-dashboard' : result.user.role === 'Agent' ? 'agent-dashboard' : 'discover'
+      setActiveView(defaultView)
+      localStorage.setItem('activeView', defaultView)
       setShowAuthScreen(false)
       return { ok: true }
     } catch (error) {
@@ -855,7 +885,7 @@ function App() {
             {authUser ? (
               <>
                 <div className="mini-avatar">{authUser.initials}</div>
-                <button className="logout-button" onClick={() => { setAuthUser(null); setRole('Tenant') }}>Log out</button>
+                <button className="logout-button" onClick={() => { setAuthUser(null); setRole('Tenant'); localStorage.removeItem('activeView'); setActiveView('discover') }}>Log out</button>
               </>
             ) : (
               <button className="login-link" onClick={() => setShowAuthScreen(true)}>Sign in</button>
@@ -1131,7 +1161,10 @@ function App() {
         </div>
       )}
 
-        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} />}
+        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} onViewChange={(internalView) => {
+          const viewMap = { dashboard: 'agent-dashboard', homes: 'agent-homes', applications: 'agent-applications', buildings: 'agent-buildings', profile: 'agent-profile' }
+          setActiveView(viewMap[internalView] || 'agent-dashboard')
+        }} />}
 
         {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => setActiveView('agent-dashboard')} />}
       </main>
