@@ -972,88 +972,157 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
           </div>
           
           {/* Nested Cards */}
-          <div style={{ display: 'grid', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
             {/* Home Applications Nested Card */}
-            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb' }}>
-              <div 
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: expandedApplicationSection === 'home' ? '16px' : '0' }}
-                onClick={() => setExpandedApplicationSection(expandedApplicationSection === 'home' ? null : 'home')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '20px' }}>{expandedApplicationSection === 'home' ? '▼' : '▶'}</span>
-                  <h3 style={{ margin: 0, fontSize: '16px', color: '#173d36' }}>Home Applications</h3>
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '8px', 
+                padding: '24px', 
+                boxShadow: '0 7px 24px rgba(29,53,39,.06)',
+                cursor: 'pointer',
+                border: expandedApplicationSection === 'home' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                transition: 'all 0.2s ease'
+              }}
+              onClick={() => setExpandedApplicationSection(expandedApplicationSection === 'home' ? null : 'home')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '28px', color: '#173d36' }}>⌂</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#173d36' }}>Home Applications</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#7c8981' }}>Manage standalone home applications</p>
                 </div>
-                <span style={{ background: '#e5e7eb', padding: '4px 12px', borderRadius: '12px', fontSize: '12px' }}>
-                  {applications.filter(app => !app.building_id).length}
-                </span>
               </div>
-              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '28px', color: '#173d36', font: '400 32px Georgia, serif' }}>
+                  {applications.filter(app => !app.building_id).length}
+                </strong>
+                <span style={{ fontSize: '12px', color: '#9ba59f' }}>Total applications</span>
+              </div>
+            </div>
+
+            {/* Building Applications Nested Card */}
+            <div 
+              style={{ 
+                background: '#fff', 
+                borderRadius: '8px', 
+                padding: '24px', 
+                boxShadow: '0 7px 24px rgba(29,53,39,.06)',
+                cursor: 'pointer',
+                border: expandedApplicationSection === 'building' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                transition: 'all 0.2s ease'
+              }}
+              onClick={() => setExpandedApplicationSection(expandedApplicationSection === 'building' ? null : 'building')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '28px', color: '#173d36' }}>🏢</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#173d36' }}>Building Applications</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#7c8981' }}>Manage apartment/unit applications</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: '28px', color: '#173d36', font: '400 32px Georgia, serif' }}>
+                  {applications.filter(app => app.building_id).length}
+                </strong>
+                <span style={{ fontSize: '12px', color: '#9ba59f' }}>Total applications</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded Section */}
+          {expandedApplicationSection && (
+            <div className="table-panel" style={{ marginTop: '24px' }}>
+              <div className="table-title">
+                <h2>{expandedApplicationSection === 'home' ? 'Home Applications' : 'Building Applications'}</h2>
+                <span>{expandedApplicationSection === 'home' ? applications.filter(app => !app.building_id).length : applications.filter(app => app.building_id).length} application{(expandedApplicationSection === 'home' ? applications.filter(app => !app.building_id).length : applications.filter(app => app.building_id).length) === 1 ? '' : 's'}</span>
+                <button onClick={() => setExpandedApplicationSection(null)}>✕ Close</button>
+              </div>
+              <div className="users-toolbar">
+                <div className="search-field admin-user-search">
+                  <span>⌕</span>
+                  <input
+                    value={applicationSearch}
+                    onChange={(event) => setApplicationSearch(event.target.value)}
+                    placeholder="Search by tenant name or property"
+                  />
+                </div>
+                <select
+                  className="role-filter"
+                  value={applicationRegionFilter}
+                  onChange={(event) => setApplicationRegionFilter(event.target.value)}
+                  aria-label="Filter applications by region"
+                >
+                  <option value="All regions">All regions</option>
+                  {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <select
+                  className="role-filter"
+                  value={applicationCategoryFilter}
+                  onChange={(event) => setApplicationCategoryFilter(event.target.value)}
+                  aria-label="Filter applications by category"
+                >
+                  <option value="All categories">All categories</option>
+                  <option value="Studio">Studio</option>
+                  <option value="One bedroom">One bedroom</option>
+                  <option value="Two bedroom">Two bedroom</option>
+                  <option value="Three bedroom">Three bedroom</option>
+                  <option value="Four bedroom">Four bedroom</option>
+                </select>
+              </div>
               {expandedApplicationSection === 'home' && (
                 <>
-                  <div className="users-toolbar" style={{ marginBottom: '16px' }}>
-                    <div className="search-field admin-user-search">
-                      <span>⌕</span>
-                      <input
-                        value={applicationSearch}
-                        onChange={(event) => setApplicationSearch(event.target.value)}
-                        placeholder="Search by tenant name or home"
-                      />
-                    </div>
-                    <select
-                      className="role-filter"
-                      value={applicationRegionFilter}
-                      onChange={(event) => setApplicationRegionFilter(event.target.value)}
-                      aria-label="Filter applications by region"
-                    >
-                      <option value="All regions">All regions</option>
-                      {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <select
-                      className="role-filter"
-                      value={applicationCategoryFilter}
-                      onChange={(event) => setApplicationCategoryFilter(event.target.value)}
-                      aria-label="Filter applications by category"
-                    >
-                      <option value="All categories">All categories</option>
-                      <option value="Studio">Studio</option>
-                      <option value="One bedroom">One bedroom</option>
-                      <option value="Two bedroom">Two bedroom</option>
-                      <option value="Three bedroom">Three bedroom</option>
-                      <option value="Four bedroom">Four bedroom</option>
-                    </select>
-                  </div>
                   {applications.filter(app => !app.building_id).length === 0 ? (
                     <div className="empty-state"><strong>No home applications yet</strong><span>Applications for standalone homes will appear here.</span></div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                      {applications.filter(app => {
-                        const isHomeApp = !app.building_id
-                        const search = applicationSearch.toLowerCase()
-                        const matchesSearch = !search ||
-                          (app.tenant_name || '').toLowerCase().includes(search) ||
-                          (app.name || '').toLowerCase().includes(search) ||
-                          (app.location || '').toLowerCase().includes(search)
-                        const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
-                        const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
-                        return isHomeApp && matchesSearch && matchesRegion && matchesCategory
-                      }).map((application) => (
-                        <div key={application.id} style={{ background: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px' }}>{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                            <div style={{ flex: 1 }}>
-                              <strong style={{ fontSize: '14px', display: 'block' }}>{application.tenant_name || 'Tenant'}</strong>
-                              <span style={{ fontSize: '12px', color: '#6b7280' }}>{application.name || '—'}</span>
-                            </div>
-                            <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '11px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white', textTransform: 'capitalize' }}>{application.status}</span>
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
-                            <div>📍 {application.location || '—'}</div>
-                            <div>🏷️ {application.type || '—'}</div>
-                            <div>💰 {formatKes(application.deposit)} deposit</div>
-                          </div>
-                          <button onClick={() => viewApplicationDetail(application)} style={{ width: '100%', padding: '8px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>View Application →</button>
-                        </div>
-                      ))}
+                    <div className="users-table-wrap">
+                      <table className="users-table applications-table">
+                        <thead>
+                          <tr>
+                            <th>Tenant</th>
+                            <th>Home</th>
+                            <th>Location</th>
+                            <th>Region</th>
+                            <th>Category</th>
+                            <th>Deposit</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {applications.filter(app => {
+                            const isHomeApp = !app.building_id
+                            const search = applicationSearch.toLowerCase()
+                            const matchesSearch = !search ||
+                              (app.tenant_name || '').toLowerCase().includes(search) ||
+                              (app.name || '').toLowerCase().includes(search) ||
+                              (app.location || '').toLowerCase().includes(search)
+                            const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
+                            const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
+                            return isHomeApp && matchesSearch && matchesRegion && matchesCategory
+                          }).map((application) => (
+                            <tr key={application.id}>
+                              <td>
+                                <div className="users-table-name">
+                                  <div className="avatar">{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                                  <strong>{application.tenant_name || 'Tenant'}</strong>
+                                </div>
+                              </td>
+                              <td>{application.name || '—'}</td>
+                              <td>{application.location || '—'}</td>
+                              <td>{application.region || '—'}</td>
+                              <td>{application.type || '—'}</td>
+                              <td>{formatKes(application.deposit)}</td>
+                              <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white' }}>{application.status}</span></td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                  <button onClick={() => viewApplicationDetail(application)} style={{ padding: '6px 14px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View →</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                   {applications.filter(app => {
@@ -1071,89 +1140,59 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   )}
                 </>
               )}
-            </div>
-
-            {/* Building Applications Nested Card */}
-            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb' }}>
-              <div 
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: expandedApplicationSection === 'building' ? '16px' : '0' }}
-                onClick={() => setExpandedApplicationSection(expandedApplicationSection === 'building' ? null : 'building')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '20px' }}>{expandedApplicationSection === 'building' ? '▼' : '▶'}</span>
-                  <h3 style={{ margin: 0, fontSize: '16px', color: '#173d36' }}>Building/Apartment Applications</h3>
-                </div>
-                <span style={{ background: '#e5e7eb', padding: '4px 12px', borderRadius: '12px', fontSize: '12px' }}>
-                  {applications.filter(app => app.building_id).length}
-                </span>
-              </div>
-              
               {expandedApplicationSection === 'building' && (
                 <>
-                  <div className="users-toolbar" style={{ marginBottom: '16px' }}>
-                    <div className="search-field admin-user-search">
-                      <span>⌕</span>
-                      <input
-                        value={applicationSearch}
-                        onChange={(event) => setApplicationSearch(event.target.value)}
-                        placeholder="Search by tenant name or building/unit"
-                      />
-                    </div>
-                    <select
-                      className="role-filter"
-                      value={applicationRegionFilter}
-                      onChange={(event) => setApplicationRegionFilter(event.target.value)}
-                      aria-label="Filter applications by region"
-                    >
-                      <option value="All regions">All regions</option>
-                      {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <select
-                      className="role-filter"
-                      value={applicationCategoryFilter}
-                      onChange={(event) => setApplicationCategoryFilter(event.target.value)}
-                      aria-label="Filter applications by category"
-                    >
-                      <option value="All categories">All categories</option>
-                      <option value="Studio">Studio</option>
-                      <option value="One bedroom">One bedroom</option>
-                      <option value="Two bedroom">Two bedroom</option>
-                      <option value="Three bedroom">Three bedroom</option>
-                      <option value="Four bedroom">Four bedroom</option>
-                    </select>
-                  </div>
                   {applications.filter(app => app.building_id).length === 0 ? (
                     <div className="empty-state"><strong>No building applications yet</strong><span>Applications for building units will appear here.</span></div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                      {applications.filter(app => {
-                        const isBuildingApp = app.building_id
-                        const search = applicationSearch.toLowerCase()
-                        const matchesSearch = !search ||
-                          (app.tenant_name || '').toLowerCase().includes(search) ||
-                          (app.name || '').toLowerCase().includes(search) ||
-                          (app.location || '').toLowerCase().includes(search)
-                        const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
-                        const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
-                        return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
-                      }).map((application) => (
-                        <div key={application.id} style={{ background: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px' }}>{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                            <div style={{ flex: 1 }}>
-                              <strong style={{ fontSize: '14px', display: 'block' }}>{application.tenant_name || 'Tenant'}</strong>
-                              <span style={{ fontSize: '12px', color: '#6b7280' }}>{application.name || '—'}</span>
-                            </div>
-                            <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '11px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white', textTransform: 'capitalize' }}>{application.status}</span>
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
-                            <div>📍 {application.location || '—'}</div>
-                            <div>🏷️ {application.type || '—'}</div>
-                            <div>💰 {formatKes(application.deposit)} deposit</div>
-                          </div>
-                          <button onClick={() => viewApplicationDetail(application)} style={{ width: '100%', padding: '8px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>View Application →</button>
-                        </div>
-                      ))}
+                    <div className="users-table-wrap">
+                      <table className="users-table applications-table">
+                        <thead>
+                          <tr>
+                            <th>Tenant</th>
+                            <th>Building - Unit</th>
+                            <th>Location</th>
+                            <th>Region</th>
+                            <th>Category</th>
+                            <th>Deposit</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {applications.filter(app => {
+                            const isBuildingApp = app.building_id
+                            const search = applicationSearch.toLowerCase()
+                            const matchesSearch = !search ||
+                              (app.tenant_name || '').toLowerCase().includes(search) ||
+                              (app.name || '').toLowerCase().includes(search) ||
+                              (app.location || '').toLowerCase().includes(search)
+                            const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
+                            const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
+                            return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
+                          }).map((application) => (
+                            <tr key={application.id}>
+                              <td>
+                                <div className="users-table-name">
+                                  <div className="avatar">{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                                  <strong>{application.tenant_name || 'Tenant'}</strong>
+                                </div>
+                              </td>
+                              <td>{application.name || '—'}</td>
+                              <td>{application.location || '—'}</td>
+                              <td>{application.region || '—'}</td>
+                              <td>{application.type || '—'}</td>
+                              <td>{formatKes(application.deposit)}</td>
+                              <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white' }}>{application.status}</span></td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                  <button onClick={() => viewApplicationDetail(application)} style={{ padding: '6px 14px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View →</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                   {applications.filter(app => {
@@ -1172,7 +1211,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 </>
               )}
             </div>
-          </div>
+          )}
         </div>
       )}
 
