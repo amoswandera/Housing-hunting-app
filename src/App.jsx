@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
 import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMessages, fetchMyApplications, fetchMyRating, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, sendMessage, submitApplication, submitRating, transferAgentHomes, updatePassword, updateProfile, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
 import { supabase } from './supabaseClient'
@@ -297,6 +297,11 @@ function App() {
   const [savedRegion, setSavedRegion] = useState('All regions')
   const [savedCategory, setSavedCategory] = useState('All categories')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('All')
+  const [showUnitSelection, setShowUnitSelection] = useState(false)
+  const [selectedBuilding, setSelectedBuilding] = useState(null)
+  const [buildingUnits, setBuildingUnits] = useState([])
+  const [unitFilterCategory, setUnitFilterCategory] = useState('All')
+  const [unitFilterFloor, setUnitFilterFloor] = useState('All')
   const [showNotifications, setShowNotifications] = useState(false)
   const [readNotifications, setReadNotifications] = useState(new Set())
   // Messaging state
@@ -446,6 +451,47 @@ function App() {
 
   const PAGE_SIZE = 12
 
+  // Group homes by building for building cards
+  const buildingsWithUnits = useMemo(() => {
+    const buildingMap = {}
+    homes.forEach(home => {
+      if (home.building_id) {
+        if (!buildingMap[home.building_id]) {
+          buildingMap[home.building_id] = {
+            id: home.building_id,
+            name: home.building_name || 'Building',
+            location: home.building_location || home.location,
+            region: home.building_region || home.region,
+            units: [],
+            totalUnits: 0,
+            availableUnits: 0,
+            minPrice: Infinity,
+            maxPrice: 0,
+            categories: new Set()
+          }
+        }
+        buildingMap[home.building_id].units.push(home)
+        buildingMap[home.building_id].totalUnits++
+        if (home.available) {
+          buildingMap[home.building_id].availableUnits++
+          buildingMap[home.building_id].minPrice = Math.min(buildingMap[home.building_id].minPrice, home.price)
+          buildingMap[home.building_id].maxPrice = Math.max(buildingMap[home.building_id].maxPrice, home.price)
+          if (home.category) buildingMap[home.building_id].categories.add(home.category)
+        }
+      }
+    })
+    return Object.values(buildingMap).map(b => ({
+      ...b,
+      categories: Array.from(b.categories),
+      minPrice: b.minPrice === Infinity ? 0 : b.minPrice
+    }))
+  }, [homes])
+
+  // Standalone homes (not part of any building)
+  const standaloneHomes = useMemo(() => {
+    return homes.filter(home => !home.building_id)
+  }, [homes])
+
   const filteredHomes = useMemo(() => {
     let result = homes.filter((home) => {
       const matchesRegion = region === 'All regions' || home.region === region
@@ -494,6 +540,20 @@ function App() {
     // Show confirmation modal before submitting
     setApplyMessage('')
     setApplyConfirm(selectedHome)
+  }
+
+  const openBuildingUnits = async (building) => {
+    try {
+      const units = await fetchUnitsInBuilding(building.id, {
+        category: unitFilterCategory,
+        floor: unitFilterFloor
+      })
+      setBuildingUnits(units)
+      setSelectedBuilding(building)
+      setShowUnitSelection(true)
+    } catch (error) {
+      showToast('Failed to load units')
+    }
   }
 
   const submitBooking = async () => {
@@ -644,7 +704,50 @@ function App() {
     const searchable = `${home.name} ${home.location} ${home.type}`.toLowerCase()
     return matchesRegion && matchesCategory && searchable.includes(savedSearch.toLowerCase())
   }), [homes, saved, savedRegion, savedCategory, savedSearch])
-  const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex="0" onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div>{home.rating ? <span className="rating">★ {home.rating}</span> : null}</div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
+  const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex={0} onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div>{home.rating ? <span className="rating">★ {home.rating}</span> : null}</div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
+
+  const renderBuildingCard = (building) => {
+    const primaryImage = building.units.length > 0 ? building.units[0].image : ''
+    const priceRange = building.minPrice === building.maxPrice
+      ? formatKes(building.minPrice)
+      : `${formatKes(building.minPrice)} – ${formatKes(building.maxPrice)}`
+
+    return (
+      <article className="home-card" key={building.id}>
+        <div
+          className="image-wrap"
+          role="button"
+          tabIndex={0}
+          onClick={() => openBuildingUnits(building)}
+          onKeyDown={(event) => event.key === 'Enter' && openBuildingUnits(building)}
+        >
+          <img src={primaryImage} alt={`${building.name} exterior`} />
+          <span className="home-tag">{building.availableUnits} units available</span>
+          <span className="photo-hint">View units ↗</span>
+        </div>
+        <div className="home-info">
+          <div className="home-title">
+            <div>
+              <h3>{building.name}</h3>
+              <p>{building.location}</p>
+            </div>
+          </div>
+          <p className="home-details">
+            {building.categories.join(', ')} <span>·</span> {building.units.length} total units
+          </p>
+          <div className="home-footer">
+            <div>
+              <strong>{priceRange}</strong>
+              <span>/ month</span>
+            </div>
+            <div className="home-actions">
+              <button onClick={() => openBuildingUnits(building)}>View units <span>↗</span></button>
+            </div>
+          </div>
+        </div>
+      </article>
+    )
+  }
 
   if (showAuthScreen) {
     return <AuthScreen accounts={accounts} onLogin={login} onCreateAccount={createAccount} onBrowseHomes={() => setShowAuthScreen(false)} />
@@ -777,8 +880,11 @@ function App() {
           <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
           <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); setHomePage(1) }} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => { setRegion(event.target.value); setHomePage(1) }}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => { setCategory(event.target.value); setHomePage(1) }}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => { setPriceRange(event.target.value); setHomePage(1) }}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><div className="select-field category-select"><span>⇅</span><select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setHomePage(1) }}><option value="default">Default order</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="newest">Newest first</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
           <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available home{filteredHomes.length !== 1 ? 's' : ''}</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
-          <section className="home-grid">{filteredHomes.slice(0, homePage * PAGE_SIZE).map(renderHomeCard)}</section>
-          {filteredHomes.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
+          <section className="home-grid">
+            {buildingsWithUnits.map(renderBuildingCard)}
+            {filteredHomes.map(renderHomeCard)}
+          </section>
+          {filteredHomes.length === 0 && buildingsWithUnits.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
           {filteredHomes.length > homePage * PAGE_SIZE && (
             <div style={{ textAlign: 'center', margin: '24px 0' }}>
               <button onClick={() => setHomePage(p => p + 1)} style={{ background: 'none', border: '1px solid #d2ded5', color: '#3e735e', borderRadius: '6px', padding: '10px 28px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
@@ -1105,7 +1211,12 @@ function App() {
             </div>
             <div className="modal-content">
               <p className="eyebrow">{selectedHome.location}</p>
-              <h2>{selectedHome.name}</h2>
+              <h2>{selectedHome.building_name ? `${selectedHome.building_name} - ${selectedHome.unit_number}` : selectedHome.name}</h2>
+              {selectedHome.unit_number && (
+                <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>
+                  Unit {selectedHome.unit_number} · {selectedHome.category} · {selectedHome.floor}
+                </p>
+              )}
               <p>{selectedHome.details} Submit an application and the agent will review it before you make any deposit payment.</p>
               {/* FAQ Accordion */}
               {selectedHome.faqs && selectedHome.faqs.length > 0 && (
@@ -1173,8 +1284,13 @@ function App() {
               You are applying for:
             </p>
             <div style={{ background: '#f6f9f5', borderRadius: '7px', padding: '14px 18px', marginBottom: '20px' }}>
-              <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '14px' }}>{applyConfirm.name}</div>
-              <div style={{ color: '#718078', fontSize: '12px', marginTop: '4px' }}>{applyConfirm.location} · {formatKes(applyConfirm.price)}/mo</div>
+              <div style={{ fontWeight: 700, color: '#1d3d33', fontSize: '14px' }}>
+                {applyConfirm.building_name ? `${applyConfirm.building_name} - ${applyConfirm.unit_number}` : applyConfirm.name}
+              </div>
+              <div style={{ color: '#718078', fontSize: '12px', marginTop: '4px' }}>
+                {applyConfirm.location} · {formatKes(applyConfirm.price)}/mo
+                {applyConfirm.unit_number && ` · Unit ${applyConfirm.unit_number}`}
+              </div>
               <div style={{ color: '#3e735e', fontSize: '12px', marginTop: '2px' }}>Agent: {applyConfirm.agent_name || 'House agent'}</div>
             </div>
             <label style={{ display: 'block', marginBottom: '20px' }}>
@@ -1194,6 +1310,95 @@ function App() {
               <button onClick={() => { setApplyConfirm(null); setApplyMessage('') }} style={{ padding: '13px 20px', background: 'none', color: '#9ca3af', border: '1px solid #dce4dd', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showUnitSelection && selectedBuilding && (
+        <div className="modal-backdrop" onClick={() => { setShowUnitSelection(false); setSelectedBuilding(null); setBuildingUnits([]) }}>
+          <div className="booking-modal" style={{ maxWidth: '700px' }} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-top-bar">
+              <button className="in-app-back-button" onClick={() => { setShowUnitSelection(false); setSelectedBuilding(null); setBuildingUnits([]) }}>
+                ← Back
+              </button>
+              <h2>{selectedBuilding.name}</h2>
+              <div></div>
+            </div>
+            <div style={{ padding: '24px' }}>
+              <p style={{ color: '#6b7280', marginBottom: '16px' }}>{selectedBuilding.location} · {selectedBuilding.availableUnits} units available</p>
+              
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                <select
+                  value={unitFilterCategory}
+                  onChange={(e) => { setUnitFilterCategory(e.target.value); openBuildingUnits(selectedBuilding) }}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e5e7eb', fontSize: '13px' }}
+                >
+                  <option value="All">All Categories</option>
+                  <option value="bedsitter">Bedsitter</option>
+                  <option value="1BR">1 Bedroom</option>
+                  <option value="2BR">2 Bedroom</option>
+                  <option value="3BR">3 Bedroom</option>
+                  <option value="4BR">4 Bedroom</option>
+                </select>
+                <select
+                  value={unitFilterFloor}
+                  onChange={(e) => { setUnitFilterFloor(e.target.value); openBuildingUnits(selectedBuilding) }}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e5e7eb', fontSize: '13px' }}
+                >
+                  <option value="All">All Floors</option>
+                  <option value="1st">1st Floor</option>
+                  <option value="2nd">2nd Floor</option>
+                  <option value="3rd">3rd Floor</option>
+                  <option value="4th">4th Floor</option>
+                </select>
+              </div>
+
+              {buildingUnits.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px', color: '#9ca3af' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
+                  <p style={{ fontSize: '16px', marginBottom: '8px' }}>No units available</p>
+                  <p style={{ fontSize: '14px' }}>Try adjusting your filters</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '16px' }}>
+                  {buildingUnits.map((unit) => (
+                    <div
+                      key={unit.id}
+                      style={{
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        display: 'flex',
+                        gap: '16px',
+                        cursor: 'pointer',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onClick={() => { setSelectedHome(unit); setShowUnitSelection(false) }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                    >
+                      <img
+                        src={unit.image}
+                        alt={unit.name}
+                        style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px' }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{unit.unit_number}</h4>
+                            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>{unit.category} · {unit.floor}</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <strong style={{ fontSize: '16px', color: '#1d3d33' }}>{formatKes(unit.price)}</strong>
+                            <span style={{ fontSize: '12px', color: '#6b7280' }}>/mo</span>
+                          </div>
+                        </div>
+                        {unit.details && <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#6b7280', lineHeight: 1.4 }}>{unit.details}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
