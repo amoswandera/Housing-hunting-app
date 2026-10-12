@@ -1202,7 +1202,7 @@ function App() {
 
         {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} />}
 
-        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => setActiveView('agent-dashboard')} />}
+        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => navigateBack()} />}
       </main>
 
       {!authUser && (
@@ -1982,6 +1982,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [newUser, setNewUser] = useState(emptyNewUser)
   const [saving, setSaving] = useState(false)
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
+  const [navigationHistory, setNavigationHistory] = useState(['agent-dashboard']) // Track navigation history for SuperAdmin
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -2011,19 +2012,52 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
     if (activeView === 'agent-dashboard') {
       setSelectedView(null)
       setShowProfile(false)
+      setNavigationHistory(prev => [...prev, 'agent-dashboard'])
     } else if (activeView === 'agent-homes') {
       setSelectedView('homes')
       setShowProfile(false)
+      setNavigationHistory(prev => [...prev, 'agent-homes'])
     } else if (activeView === 'agent-applications') {
       setSelectedView('applications')
       setShowProfile(false)
+      setNavigationHistory(prev => [...prev, 'agent-applications'])
     } else if (activeView === 'agent-profile') {
       setShowProfile(true)
       setSelectedView(null)
+      setNavigationHistory(prev => [...prev, 'agent-profile'])
       // Load profile
       fetchProfile(token).then(setProfile).catch(onNotify)
     }
   }, [activeView, token, onNotify])
+
+  // Navigation with history tracking for SuperAdmin
+  const navigateTo = (view) => {
+    setSelectedView(view)
+    setNavigationHistory(prev => [...prev, view])
+  }
+
+  const navigateBack = () => {
+    if (navigationHistory.length > 1) {
+      const newHistory = [...navigationHistory]
+      newHistory.pop() // Remove current view
+      const previousView = newHistory[newHistory.length - 1]
+      setNavigationHistory(newHistory)
+      if (previousView === 'agent-dashboard') {
+        setSelectedView(null)
+        setActiveView('agent-dashboard')
+      } else if (previousView === 'agent-homes') {
+        setSelectedView('homes')
+        setActiveView('agent-homes')
+      } else if (previousView === 'agent-applications') {
+        setSelectedView('applications')
+        setActiveView('agent-applications')
+      } else if (previousView === 'agent-profile') {
+        setShowProfile(true)
+        setSelectedView(null)
+        setActiveView('agent-profile')
+      }
+    }
+  }
 
   const createUser = async (event) => {
     event.preventDefault()
