@@ -2304,7 +2304,6 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                   <option value="Three bedroom">Three bedroom</option>
                   <option value="Four bedroom">Four bedroom</option>
                 </select>
-                </select>
               </div>
 
               {/* Nested Cards for Homes */}
