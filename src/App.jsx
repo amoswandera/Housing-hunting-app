@@ -524,11 +524,6 @@ function App() {
     return homes.filter(home => !home.building_id)
   }, [homes])
 
-  // Filtered homes for display - exclude building units since they're shown in building cards
-  const filteredHomesForDisplay = useMemo(() => {
-    return filteredHomes.filter(home => !home.building_id)
-  }, [filteredHomes])
-
   const filteredHomes = useMemo(() => {
     let result = homes.filter((home) => {
       const matchesRegion = region === 'All regions' || home.region === region
@@ -548,6 +543,11 @@ function App() {
     else if (sortBy === 'newest') result = [...result].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
     return result
   }, [category, homes, query, region, priceRange, sortBy])
+
+  // Filtered homes for display - exclude building units since they're shown in building cards
+  const filteredHomesForDisplay = useMemo(() => {
+    return filteredHomes.filter(home => !home.building_id)
+  }, [filteredHomes])
 
   const showToast = useCallback((message) => {
     setToast(message)
