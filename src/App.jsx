@@ -1161,10 +1161,7 @@ function App() {
         </div>
       )}
 
-        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} onViewChange={(internalView) => {
-          const viewMap = { dashboard: 'agent-dashboard', homes: 'agent-homes', applications: 'agent-applications', buildings: 'agent-buildings', profile: 'agent-profile' }
-          setActiveView(viewMap[internalView] || 'agent-dashboard')
-        }} />}
+        {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} />}
 
         {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => setActiveView('agent-dashboard')} />}
       </main>

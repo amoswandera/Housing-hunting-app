@@ -28,7 +28,7 @@ const getWhatsAppUrl = (phone, propertyName = '') => {
   return `https://wa.me/${number}?text=${encodeURIComponent(text)}`
 }
 
-function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes', onViewChange }) {
+function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [homes, setHomes] = useState([])
   const [applications, setApplications] = useState([])
   const [buildings, setBuildings] = useState([])
@@ -160,13 +160,6 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes', onV
       setInternalView('buildings')
     }
   }, [view])
-
-  // Notify parent when internalView changes (for persistence)
-  useEffect(() => {
-    if (onViewChange) {
-      onViewChange(internalView)
-    }
-  }, [internalView, onViewChange])
 
   const submitHome = async (event) => {
     event.preventDefault()
