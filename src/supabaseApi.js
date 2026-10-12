@@ -288,7 +288,7 @@ export const updateProfile = async (profile, token) => {
 
 // Homes functions — fetch all homes (SuperAdmin sees all, others see available only)
 export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds = []) => {
-  // First fetch homes with their images and building data
+  // First fetch homes with their profiles - don't join buildings yet to avoid RLS issues
   let query = supabase
     .from('homes')
     .select(`
@@ -298,12 +298,6 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
         phone,
         bio,
         company
-      ),
-      buildings!homes_building_id_fkey (
-        id,
-        name as building_name,
-        location as building_location,
-        region as building_region
       )
     `)
 
@@ -371,8 +365,23 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   // Fetch building images for homes that are part of buildings
   const buildingIds = [...new Set(homesData.filter(h => h.building_id).map(h => h.building_id))]
   let buildingImagesByBuilding = {}
+  let buildingsData = {}
+
   if (buildingIds.length > 0) {
     try {
+      // Fetch building details (without RLS blocking)
+      const { data: buildings } = await supabase
+        .from('buildings')
+        .select('*')
+        .in('id', buildingIds)
+
+      if (buildings) {
+        buildings.forEach(b => {
+          buildingsData[b.id] = b
+        })
+      }
+
+      // Fetch building images
       const { data: buildingImages } = await supabase
         .from('building_images')
         .select('*')
@@ -391,7 +400,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
         })
       }
     } catch (error) {
-      console.log('Error fetching building images:', error)
+      console.log('Error fetching building data:', error)
     }
   }
 
@@ -510,9 +519,9 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       faqs: faqsByHome[home.id] || [],
       rating: ratingInfo ? (ratingInfo.total / ratingInfo.count).toFixed(1) : null,
       rating_count: ratingInfo ? ratingInfo.count : 0,
-      building_name: home.buildings?.name || null,
-      building_location: home.buildings?.location || null,
-      building_region: home.buildings?.region || null,
+      building_name: buildingsData[home.building_id]?.name || null,
+      building_location: buildingsData[home.building_id]?.location || null,
+      building_region: buildingsData[home.building_id]?.region || null,
     }
   })
 }

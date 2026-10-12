@@ -382,7 +382,12 @@ function App() {
   }, [handleBack])
 
   useEffect(() => {
-    fetchHomes().then(setHomes).catch(() => {})
+    fetchHomes()
+      .then(setHomes)
+      .catch((error) => {
+        console.error('Failed to fetch homes:', error)
+        showToast('Failed to load homes. Please refresh.')
+      })
   }, [])
 
   useEffect(() => {
