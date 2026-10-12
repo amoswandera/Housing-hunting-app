@@ -504,6 +504,7 @@ function App() {
             categories: new Set(),
             images: home.building_images || []
           }
+          console.log('Created building entry:', buildingMap[home.building_id], 'from home:', home)
         }
         buildingMap[home.building_id].units.push(home)
         buildingMap[home.building_id].totalUnits++
