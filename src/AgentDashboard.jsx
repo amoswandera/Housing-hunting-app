@@ -106,7 +106,9 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const loadData = useCallback(async () => {
     try {
       const [managedHomes, receivedApplications, agentBuildings] = await Promise.all([fetchManagedHomes(token), fetchAgentApplications(token), fetchBuildings(token)])
-      setHomes(managedHomes)
+      // Filter out building units - homes section should only show standalone homes
+      const standaloneHomes = managedHomes.filter(home => !home.building_id)
+      setHomes(standaloneHomes)
       setBuildings(agentBuildings)
       setApplications(receivedApplications)
       // Check for applications approved but not paid within 72 hours

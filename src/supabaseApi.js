@@ -487,11 +487,16 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
 
   return filteredHomes.map((home) => {
     const imgs = imagesByHome[home.id] || []
+    const buildingImgs = buildingImagesByBuilding[home.building_id] || []
     
-    // If home has no images but is part of a building, use building images
+    // For building units: if unit has custom images, use those
+    // Otherwise, use building images as fallback
     let finalImages = imgs
-    if (imgs.length === 0 && home.building_id && buildingImagesByBuilding[home.building_id]) {
-      finalImages = buildingImagesByBuilding[home.building_id]
+    if (home.building_id) {
+      // If unit has no custom images, use building images
+      if (imgs.length === 0 && buildingImgs.length > 0) {
+        finalImages = buildingImgs
+      }
     }
     
     // If still no images, use single image fallback
@@ -522,7 +527,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       building_name: buildingsData[home.building_id]?.name || null,
       building_location: buildingsData[home.building_id]?.location || null,
       building_region: buildingsData[home.building_id]?.region || null,
-      building_images: buildingImagesByBuilding[home.building_id] || [],
+      building_images: buildingImgs,
     }
   })
 }
@@ -707,22 +712,68 @@ export const fetchManagedHomes = async (token) => {
     console.log('home_images table not yet created, using single image fallback')
   }
 
+  // Fetch building images for homes that are part of buildings
+  const buildingIds = [...new Set(homesData.filter(h => h.building_id).map(h => h.building_id))]
+  let buildingImagesByBuilding = {}
+
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildingImages } = await supabase
+        .from('building_images')
+        .select('*')
+        .in('building_id', buildingIds)
+        .order('order_index', { ascending: true })
+
+      if (buildingImages) {
+        buildingImages.forEach(img => {
+          if (!buildingImagesByBuilding[img.building_id]) {
+            buildingImagesByBuilding[img.building_id] = []
+          }
+          buildingImagesByBuilding[img.building_id].push({
+            ...img,
+            url: img.image_url || '',
+          })
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building images:', error)
+    }
+  }
+
   // Ensure data is an array before mapping
   if (!homesData || !Array.isArray(homesData)) {
     return []
   }
 
   return homesData.map((home) => {
-    const imgs = imagesByHome[home.id] || [{ url: home.image, is_primary: true, order_index: 0 }]
-    const primaryImage = imgs.find(i => i.is_primary) || imgs[0]
+    const imgs = imagesByHome[home.id] || []
+    const buildingImgs = buildingImagesByBuilding[home.building_id] || []
+    
+    // For building units: if unit has custom images, use those
+    // Otherwise, use building images as fallback
+    let finalImages = imgs
+    if (home.building_id) {
+      if (imgs.length === 0 && buildingImgs.length > 0) {
+        finalImages = buildingImgs
+      }
+    }
+    
+    // If still no images, use single image fallback
+    if (finalImages.length === 0) {
+      finalImages = [{ url: home.image, is_primary: true, order_index: 0 }]
+    }
+    
+    const primaryImage = finalImages.find(i => i.is_primary) || finalImages[0]
     const cardImage = home.image || primaryImage?.url || ''
+    
     return {
       ...home,
       parking: Boolean(home.parking),
       available: Boolean(home.available),
       agent_id: home.owner_id,
       image: cardImage,
-      images: imgs,
+      images: finalImages,
+      building_images: buildingImgs,
     }
   })
 }
