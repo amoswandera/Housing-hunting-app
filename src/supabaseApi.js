@@ -994,7 +994,7 @@ export const fetchAgentApplications = async (token) => {
   // First get the agent's home IDs
   const { data: homesData, error: homesError } = await supabase
     .from('homes')
-    .select('id')
+    .select('id, building_id')
     .eq('owner_id', user.id)
 
   handleSupabaseError(homesError)
@@ -1004,6 +1004,26 @@ export const fetchAgentApplications = async (token) => {
   }
 
   const homeIds = homesData.map(h => h.id)
+  const buildingIds = [...new Set(homesData.filter(h => h.building_id).map(h => h.building_id))]
+
+  // Fetch building details for building units
+  let buildingsData = {}
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildings } = await supabase
+        .from('buildings')
+        .select('id, name')
+        .in('id', buildingIds)
+
+      if (buildings) {
+        buildings.forEach(b => {
+          buildingsData[b.id] = b
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building data:', error)
+    }
+  }
 
   // Then get applications for those homes
   const { data, error } = await supabase
@@ -1016,7 +1036,11 @@ export const fetchAgentApplications = async (token) => {
         region,
         type,
         deposit,
-        image
+        image,
+        building_id,
+        unit_number,
+        category,
+        floor
       ),
       profiles!applications_tenant_id_fkey (
         name,
@@ -1041,6 +1065,15 @@ export const fetchAgentApplications = async (token) => {
     const identifier = app.profiles?.identifier || ''
     // tenant_email: if identifier looks like an email use it, else empty
     const tenant_email = identifier.includes('@') ? identifier : ''
+    const home = app.homes || {}
+    const buildingId = home.building_id
+    const building = buildingsData[buildingId]
+    
+    // For building units, name should be "Building Name - Unit Number"
+    const displayName = buildingId && building 
+      ? `${building.name} - ${home.unit_number}`
+      : home.name
+
     return {
       ...app,
       tenant_id: app.tenant_id,
@@ -1051,12 +1084,18 @@ export const fetchAgentApplications = async (token) => {
       tenant_national_id: app.profiles?.national_id || '',
       tenant_occupation: app.profiles?.occupation || '',
       tenant_bio: app.profiles?.bio || '',
-      name: app.homes?.name || '',
-      location: app.homes?.location || '',
-      region: app.homes?.region || '',
-      type: app.homes?.type || '',
-      deposit: app.homes?.deposit || 0,
-      image: app.homes?.image || '',
+      name: displayName,
+      original_name: home.name,
+      location: home.location || '',
+      region: home.region || '',
+      type: home.type || '',
+      deposit: home.deposit || 0,
+      image: home.image || '',
+      building_id: home.building_id,
+      unit_number: home.unit_number,
+      category: home.category,
+      floor: home.floor,
+      building_name: building?.name || null,
     }
   })
 }
@@ -1531,13 +1570,22 @@ export const fetchSuperAdminApplications = async (token) => {
     throw new Error('SuperAdmin access is required.')
   }
 
-  // Query with explicit Authorization header so RLS sees the correct uid
-  // regardless of whether the client-side session has been restored yet.
+  // Fetch all applications with home and building details
   const { data, error } = await supabase
     .from('applications')
     .select(`
       *,
-      homes (name, location, region, type, deposit),
+      homes (
+        name,
+        location,
+        region,
+        type,
+        deposit,
+        building_id,
+        unit_number,
+        category,
+        floor
+      ),
       profiles!applications_tenant_id_fkey (name, phone)
     `)
     .order('created_at', { ascending: false })
@@ -1545,7 +1593,49 @@ export const fetchSuperAdminApplications = async (token) => {
 
   handleSupabaseError(error)
 
-  return data || []
+  // Get unique building IDs from applications
+  const buildingIds = [...new Set((data || []).filter(app => app.homes?.building_id).map(app => app.homes.building_id))]
+
+  // Fetch building details
+  let buildingsData = {}
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildings } = await supabase
+        .from('buildings')
+        .select('id, name')
+        .in('id', buildingIds)
+
+      if (buildings) {
+        buildings.forEach(b => {
+          buildingsData[b.id] = b
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building data:', error)
+    }
+  }
+
+  // Map applications with building name for units
+  return (data || []).map(app => {
+    const home = app.homes || {}
+    const buildingId = home.building_id
+    const building = buildingsData[buildingId]
+    
+    // For building units, name should be "Building Name - Unit Number"
+    const displayName = buildingId && building 
+      ? `${building.name} - ${home.unit_number}`
+      : home.name
+
+    return {
+      ...app,
+      homes: {
+        ...home,
+        name: displayName,
+        original_name: home.name,
+        building_name: building?.name || null,
+      }
+    }
+  })
 }
 
 // Legacy booking functions (kept for compatibility)
