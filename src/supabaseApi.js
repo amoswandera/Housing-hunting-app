@@ -923,21 +923,16 @@ export const updateBuilding = async (id, buildingData, buildingImages, token) =>
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  const region = buildingData.region === 'Other' ? buildingData.customRegion : buildingData.region
-  if (!region) throw new Error('Please enter a region name.')
-
-  const amenities = buildingData.amenities ? buildingData.amenities.split(',').map(a => a.trim()) : []
-
   const { data, error } = await supabase
     .from('buildings')
     .update({
       name: buildingData.name,
       location: buildingData.location,
-      region,
+      region: buildingData.region,
       type: buildingData.type,
       total_units: parseInt(buildingData.totalUnits),
       description: buildingData.description,
-      amenities,
+      amenities: buildingData.amenities,
     })
     .eq('id', id)
     .eq('agent_id', user.id)
@@ -2170,6 +2165,56 @@ export const fetchBuildings = async (token) => {
   // Merge images into building data
   return (data || []).map(building => ({
     ...building,
+    images: buildingImagesByBuilding[building.id] || []
+  }))
+}
+
+export const fetchAllBuildingsAdmin = async (token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data, error } = await supabase
+    .from('buildings')
+    .select(`
+      *,
+      profiles!buildings_agent_id_fkey (name, phone, company)
+    `)
+    .order('created_at', { ascending: false })
+
+  handleSupabaseError(error)
+
+  // Fetch building images for each building
+  const buildingIds = (data || []).map(b => b.id)
+  let buildingImagesByBuilding = {}
+
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildingImages } = await supabase
+        .from('building_images')
+        .select('*')
+        .in('building_id', buildingIds)
+        .order('order_index', { ascending: true })
+
+      if (buildingImages) {
+        buildingImages.forEach(img => {
+          if (!buildingImagesByBuilding[img.building_id]) {
+            buildingImagesByBuilding[img.building_id] = []
+          }
+          buildingImagesByBuilding[img.building_id].push({
+            ...img,
+            url: img.image_url || img.url || img.image || '',
+          })
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building images:', error)
+    }
+  }
+
+  // Merge images into building data
+  return (data || []).map(building => ({
+    ...building,
+    agent_name: building.profiles?.name || 'Unknown',
     images: buildingImagesByBuilding[building.id] || []
   }))
 }

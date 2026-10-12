@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchBookings, fetchHomes, fetchMessages, fetchMyApplications, fetchMyRating, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, sendMessage, submitApplication, submitRating, transferAgentHomes, updatePassword, updateProfile, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchAllBuildingsAdmin, fetchBookings, fetchHomes, fetchMessages, fetchMyApplications, fetchMyRating, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, sendMessage, submitApplication, submitRating, transferAgentHomes, updatePassword, updateProfile, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -1996,8 +1996,8 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       const allHomes = await fetchAllHomesAdmin(token)
       setHomes(allHomes)
 
-      // Fetch all buildings
-      const allBuildings = await fetchBuildings(token)
+      // Fetch all buildings (SuperAdmin sees all buildings)
+      const allBuildings = await fetchAllBuildingsAdmin(token)
       setBuildings(allBuildings)
 
       // Fetch all applications (admin can see all)
