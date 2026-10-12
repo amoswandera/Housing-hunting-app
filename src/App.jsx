@@ -1983,6 +1983,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [saving, setSaving] = useState(false)
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
   const [expandedHomeSection, setExpandedHomeSection] = useState(null) // 'available' or 'taken' or null
+  const [expandedBuildingSection, setExpandedBuildingSection] = useState(null) // 'available' or 'full' or null
   const [navigationHistory, setNavigationHistory] = useState(['agent-dashboard']) // Track navigation history for SuperAdmin
 
   const loadData = useCallback(async () => {
@@ -2744,37 +2745,84 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                 <h2>All Buildings</h2>
                 <span>{buildings.length} building{buildings.length === 1 ? '' : 's'}</span>
               </div>
-              <div className="users-table-wrap">
-                <table className="users-table homes-table">
-                  <thead>
-                    <tr>
-                      <th>Building</th>
-                      <th>Location</th>
-                      <th>Region</th>
-                      <th>Type</th>
-                      <th>Total Units</th>
-                      <th>Agent</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {buildings.map((building) => (
-                      <tr key={building.id}>
-                        <td>
-                          <div className="users-table-name">
-                            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: building.images && building.images.length > 0 ? `url(${building.images[0].url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-                            <strong>{building.name}</strong>
-                          </div>
-                        </td>
-                        <td>{building.location}</td>
-                        <td>{building.region}</td>
-                        <td>{building.type}</td>
-                        <td>{building.total_units}</td>
-                        <td>{building.agent_name || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              {/* Nested Cards for Buildings - Group by Region */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                {Array.from(new Set(buildings.map(b => b.region))).map(region => (
+                  <div
+                    key={region}
+                    onClick={() => setExpandedBuildingSection(expandedBuildingSection === region ? null : region)}
+                    style={{
+                      background: '#fff',
+                      padding: '24px',
+                      borderRadius: '8px',
+                      boxShadow: '0 7px 24px rgba(29,53,39,.06)',
+                      cursor: 'pointer',
+                      border: expandedBuildingSection === region ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '28px', color: '#173d36' }}>🏢</span>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '18px', color: '#173d36' }}>{region}</h3>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#7c8981' }}>Buildings in this region</p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '28px', color: '#173d36', font: '400 32px Georgia, serif' }}>
+                        {buildings.filter(b => b.region === region).length}
+                      </strong>
+                      <span style={{ fontSize: '12px', color: '#9ba59f' }}>Total buildings</span>
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              {/* Expanded Table View */}
+              {expandedBuildingSection && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Buildings in {expandedBuildingSection}</h3>
+                    <button onClick={() => setExpandedBuildingSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <div className="users-table-wrap">
+                    <table className="users-table homes-table">
+                      <thead>
+                        <tr>
+                          <th>Building</th>
+                          <th>Location</th>
+                          <th>Type</th>
+                          <th>Total Units</th>
+                          <th>Agent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {buildings.filter(b => b.region === expandedBuildingSection).map((building) => (
+                          <tr key={building.id}>
+                            <td>
+                              <div className="users-table-name">
+                                <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: building.images && building.images.length > 0 ? `url(${building.images[0].url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                                <strong>{building.name}</strong>
+                              </div>
+                            </td>
+                            <td>{building.location}</td>
+                            <td>{building.type}</td>
+                            <td>{building.total_units}</td>
+                            <td>{building.agent_name || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {buildings.filter(b => b.region === expandedBuildingSection).length === 0 && (
+                    <div className="empty-state">
+                      <strong>No buildings found in this region</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!loading && buildings.length === 0 && (
                 <div className="empty-state">
                   <strong>No buildings found</strong>

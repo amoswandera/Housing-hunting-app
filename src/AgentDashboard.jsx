@@ -76,6 +76,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const msgEndRef = useRef(null)
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
   const [expandedHomeSection, setExpandedHomeSection] = useState(null) // 'available' or 'taken' or null
+  const [expandedBuildingSection, setExpandedBuildingSection] = useState(null) // 'available' or 'full' or null
   const [navigationHistory, setNavigationHistory] = useState(['dashboard']) // Track navigation history for back button
   const [editingHome, setEditingHome] = useState(null) // Home being edited
   const [editingBuilding, setEditingBuilding] = useState(null) // Building being edited
@@ -1878,71 +1879,209 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               <p style={{ fontSize: '14px' }}>Add a building to manage multiple units efficiently</p>
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {buildings.map((building) => {
-                  const primaryImage = building.images && building.images.length > 0
-                    ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
-                    : ''
-                  return (
-                    <tr key={building.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          {primaryImage && (
-                            <img
-                              src={primaryImage}
-                              alt={building.name}
-                              style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
-                            />
-                          )}
-                          <span>{building.name}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
-                      <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
-                      <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
-                      <td style={{ padding: '12px' }}>
-                        <button
-                          onClick={async () => { 
-                            setSelectedBuilding(building); 
-                            const units = await fetchUnitsInBuilding(building.id, token); 
-                            setBuildingUnits(units);
-                            setShowUnitsList(true);
-                            navigateTo('buildings');
-                          }}
-                          style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
-                        >
-                          View Units
-                        </button>
-                        <button
-                          onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
-                          style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
-                        >
-                          + Add Unit
-                        </button>
-                        <button
-                          onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
-                          style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <>
+              {/* Nested Cards for Buildings */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                {/* Buildings with Available Units Card */}
+                <div
+                  onClick={() => setExpandedBuildingSection(expandedBuildingSection === 'available' ? null : 'available')}
+                  style={{
+                    background: '#fff',
+                    padding: '24px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
+                    border: expandedBuildingSection === 'available' ? '2px solid #3e735e' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏢</div>
+                  <h3 style={{ margin: '0 0 8px', color: '#173d36', fontSize: '18px' }}>Buildings with Available Units</h3>
+                  <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '13px' }}>Buildings that have units available for rent</p>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: '#173d36' }}>
+                    {buildings.filter(b => b.available_units > 0).length}
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>Total buildings with availability</span>
+                </div>
+
+                {/* Full Buildings Card */}
+                <div
+                  onClick={() => setExpandedBuildingSection(expandedBuildingSection === 'full' ? null : 'full')}
+                  style={{
+                    background: '#fff',
+                    padding: '24px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
+                    border: expandedBuildingSection === 'full' ? '2px solid #3e735e' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏗️</div>
+                  <h3 style={{ margin: '0 0 8px', color: '#173d36', fontSize: '18px' }}>Full Buildings</h3>
+                  <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '13px' }}>Buildings where all units are occupied</p>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: '#173d36' }}>
+                    {buildings.filter(b => b.available_units === 0).length}
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>Total full buildings</span>
+                </div>
+              </div>
+
+              {/* Expanded Table Views */}
+              {expandedBuildingSection === 'available' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Buildings with Available Units</h3>
+                    <button onClick={() => setExpandedBuildingSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {buildings.filter(b => b.available_units > 0).map((building) => {
+                        const primaryImage = building.images && building.images.length > 0
+                          ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
+                          : ''
+                        return (
+                          <tr key={building.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                            <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {primaryImage && (
+                                  <img
+                                    src={primaryImage}
+                                    alt={building.name}
+                                    style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                                  />
+                                )}
+                                <span>{building.name}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
+                            <td style={{ padding: '12px' }}>
+                              <button
+                                onClick={async () => {
+                                  setSelectedBuilding(building);
+                                  const units = await fetchUnitsInBuilding(building.id, token);
+                                  setBuildingUnits(units);
+                                  setShowUnitsList(true);
+                                  navigateTo('buildings');
+                                }}
+                                style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                              >
+                                View Units
+                              </button>
+                              <button
+                                onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
+                                style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                              >
+                                + Add Unit
+                              </button>
+                              <button
+                                onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
+                                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  {buildings.filter(b => b.available_units > 0).length === 0 && (
+                    <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
+                      <p style={{ fontSize: '16px', marginBottom: '8px' }}>No buildings with available units</p>
+                      <p style={{ fontSize: '14px' }}>All units in your buildings are currently occupied</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {expandedBuildingSection === 'full' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Full Buildings</h3>
+                    <button onClick={() => setExpandedBuildingSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {buildings.filter(b => b.available_units === 0).map((building) => {
+                        const primaryImage = building.images && building.images.length > 0
+                          ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
+                          : ''
+                        return (
+                          <tr key={building.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                            <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {primaryImage && (
+                                  <img
+                                    src={primaryImage}
+                                    alt={building.name}
+                                    style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                                  />
+                                )}
+                                <span>{building.name}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
+                            <td style={{ padding: '12px' }}>
+                              <button
+                                onClick={async () => {
+                                  setSelectedBuilding(building);
+                                  const units = await fetchUnitsInBuilding(building.id, token);
+                                  setBuildingUnits(units);
+                                  setShowUnitsList(true);
+                                  navigateTo('buildings');
+                                }}
+                                style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                              >
+                                View Units
+                              </button>
+                              <button
+                                onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
+                                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  {buildings.filter(b => b.available_units === 0).length === 0 && (
+                    <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
+                      <p style={{ fontSize: '16px', marginBottom: '8px' }}>No full buildings</p>
+                      <p style={{ fontSize: '14px' }}>All your buildings have at least one available unit</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
