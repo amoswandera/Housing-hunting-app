@@ -54,7 +54,6 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
   const [selectedHome, setSelectedHome] = useState(null)
   const [internalView, setInternalView] = useState(view === 'profile' ? 'profile' : 'dashboard') // 'dashboard', 'homes', 'applications', 'buildings', or 'profile'
-  const [homeStatusFilter, setHomeStatusFilter] = useState('All') // 'All', 'Available', 'Taken'
   const [showBuildingForm, setShowBuildingForm] = useState(false)
   const [showAddUnitForm, setShowAddUnitForm] = useState(false)
   const [selectedBuilding, setSelectedBuilding] = useState(null)
@@ -76,6 +75,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [agentMsgSending, setAgentMsgSending] = useState(false)
   const msgEndRef = useRef(null)
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
+  const [expandedHomeSection, setExpandedHomeSection] = useState(null) // 'available' or 'taken' or null
   const [navigationHistory, setNavigationHistory] = useState(['dashboard']) // Track navigation history for back button
   const [editingHome, setEditingHome] = useState(null) // Home being edited
   const [editingBuilding, setEditingBuilding] = useState(null) // Building being edited
@@ -889,17 +889,6 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               </select>
             </div>
             <div className="select-field">
-              <span>📊</span>
-              <select
-                value={homeStatusFilter}
-                onChange={(e) => setHomeStatusFilter(e.target.value)}
-              >
-                <option value="All">All status</option>
-                <option value="Available">Available</option>
-                <option value="Taken">Taken</option>
-              </select>
-            </div>
-            <div className="select-field">
               <span>⌂</span>
               <select
                 value={homeCategoryFilter}
@@ -918,86 +907,239 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
           {homes.length === 0 ? (
             <div className="empty-state"><strong>No homes listed yet</strong><span>Add your first home to get started.</span></div>
           ) : (
-            <div className="users-table-wrap">
-              <table className="users-table homes-table">
-                <thead>
-                  <tr>
-                    <th>Home</th>
-                    <th>Location</th>
-                    <th>Region</th>
-                    <th>Category</th>
-                    <th>Rent</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {homes.filter(home => {
-                    const search = homeSearch.toLowerCase()
-                    const matchesSearch = !search ||
-                      home.name.toLowerCase().includes(search) ||
-                      home.location.toLowerCase().includes(search) ||
-                      home.type.toLowerCase().includes(search) ||
-                      home.region.toLowerCase().includes(search)
-                    const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
-                    const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
-                    const matchesStatus = homeStatusFilter === 'All' ||
-                      (homeStatusFilter === 'Available' && home.available) ||
-                      (homeStatusFilter === 'Taken' && !home.available)
-                    return matchesSearch && matchesRegion && matchesCategory && matchesStatus
-                  }).map((home) => (
-                    <tr key={home.id}>
-                      <td>
-                        <div className="users-table-name">
-                          <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-                          <strong>{home.name}</strong>
-                        </div>
-                      </td>
-                      <td>{home.location}</td>
-                      <td>{home.region}</td>
-                      <td>{home.type}</td>
-                      <td>{formatKes(home.price)}/mo</td>
-                      <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: home.available ? '#10b981' : '#ef4444', color: 'white' }}>{home.available ? 'Available' : 'Taken'}</span></td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button 
-                            onClick={() => { setSelectedHome(home); loadFaqsForHome(home.id) }}
-                            style={{ padding: '6px 12px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                          >
-                            View / FAQ
-                          </button>
-                          <button 
-                            onClick={() => { setEditingHome(home); setForm({ name: home.name, location: home.location, region: home.region, type: home.type, parking: home.parking, price: home.price, deposit: home.deposit, image: home.image, tag: home.tag || '', details: home.details || '', customRegion: '' }); setShowForm(true); navigateTo('homes') }}
-                            style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => toggleAvailability(home)}
-                            style={{ padding: '6px 12px', fontSize: '12px', background: home.available ? '#ef4444' : '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                          >
-                            {home.available ? 'Mark taken' : 'Mark available'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {homes.filter(home => {
-                const search = homeSearch.toLowerCase()
-                const matchesSearch = !search ||
-                  home.name.toLowerCase().includes(search) ||
-                  home.location.toLowerCase().includes(search) ||
-                  home.type.toLowerCase().includes(search) ||
-                  home.region.toLowerCase().includes(search)
-                const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
-                const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
-                return matchesSearch && matchesRegion && matchesCategory
-              }).length === 0 && (
-                <div className="empty-state"><strong>No homes found</strong><span>Try a different search, region, or category.</span></div>
+            <>
+              {/* Nested Cards for Homes */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                {/* Available Homes Card */}
+                <div
+                  onClick={() => setExpandedHomeSection(expandedHomeSection === 'available' ? null : 'available')}
+                  style={{
+                    background: '#fff',
+                    padding: '24px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
+                    border: expandedHomeSection === 'available' ? '2px solid #3e735e' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{ fontSize: '32px', marginBottom: '12px' }}>⌂</div>
+                  <h3 style={{ margin: '0 0 8px', color: '#173d36', fontSize: '18px' }}>Available Homes</h3>
+                  <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '13px' }}>Homes currently available for tenants</p>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: '#173d36' }}>
+                    {homes.filter(h => h.available && (
+                      (homeSearch === '' || h.name.toLowerCase().includes(homeSearch.toLowerCase()) || h.location.toLowerCase().includes(homeSearch.toLowerCase())) &&
+                      (homeRegionFilter === 'All regions' || h.region === homeRegionFilter) &&
+                      (homeCategoryFilter === 'All categories' || h.type === homeCategoryFilter)
+                    )).length}
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>Total available homes</span>
+                </div>
+
+                {/* Taken Homes Card */}
+                <div
+                  onClick={() => setExpandedHomeSection(expandedHomeSection === 'taken' ? null : 'taken')}
+                  style={{
+                    background: '#fff',
+                    padding: '24px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
+                    border: expandedHomeSection === 'taken' ? '2px solid #3e735e' : '2px solid transparent',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏠</div>
+                  <h3 style={{ margin: '0 0 8px', color: '#173d36', fontSize: '18px' }}>Taken Homes</h3>
+                  <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '13px' }}>Homes currently occupied by tenants</p>
+                  <div style={{ fontSize: '36px', fontWeight: 700', color: '#173d36' }}>
+                    {homes.filter(h => !h.available && (
+                      (homeSearch === '' || h.name.toLowerCase().includes(homeSearch.toLowerCase()) || h.location.toLowerCase().includes(homeSearch.toLowerCase())) &&
+                      (homeRegionFilter === 'All regions' || h.region === homeRegionFilter) &&
+                      (homeCategoryFilter === 'All categories' || h.type === homeCategoryFilter)
+                    )).length}
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>Total taken homes</span>
+                </div>
+              </div>
+
+              {/* Expanded Table Views */}
+              {expandedHomeSection === 'available' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Available Homes</h3>
+                    <button onClick={() => setExpandedHomeSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <div className="users-table-wrap">
+                    <table className="users-table homes-table">
+                      <thead>
+                        <tr>
+                          <th>Home</th>
+                          <th>Location</th>
+                          <th>Region</th>
+                          <th>Category</th>
+                          <th>Rent</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {homes.filter(home => {
+                          if (!home.available) return false
+                          const search = homeSearch.toLowerCase()
+                          const matchesSearch = !search ||
+                            home.name.toLowerCase().includes(search) ||
+                            home.location.toLowerCase().includes(search) ||
+                            home.type.toLowerCase().includes(search) ||
+                            home.region.toLowerCase().includes(search)
+                          const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+                          const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+                          return matchesSearch && matchesRegion && matchesCategory
+                        }).map((home) => (
+                          <tr key={home.id}>
+                            <td>
+                              <div className="users-table-name">
+                                <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                                <strong>{home.name}</strong>
+                              </div>
+                            </td>
+                            <td>{home.location}</td>
+                            <td>{home.region}</td>
+                            <td>{home.type}</td>
+                            <td>{formatKes(home.price)}/mo</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => { setSelectedHome(home); loadFaqsForHome(home.id) }}
+                                  style={{ padding: '6px 12px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                  View / FAQ
+                                </button>
+                                <button
+                                  onClick={() => { setEditingHome(home); setForm({ name: home.name, location: home.location, region: home.region, type: home.type, parking: home.parking, price: home.price, deposit: home.deposit, image: home.image, tag: home.tag || '', details: home.details || '', customRegion: '' }); setShowForm(true); navigateTo('homes') }}
+                                  style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => toggleAvailability(home)}
+                                  style={{ padding: '6px 12px', fontSize: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                  Mark taken
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {homes.filter(home => {
+                      if (!home.available) return false
+                      const search = homeSearch.toLowerCase()
+                      const matchesSearch = !search ||
+                        home.name.toLowerCase().includes(search) ||
+                        home.location.toLowerCase().includes(search) ||
+                        home.type.toLowerCase().includes(search) ||
+                        home.region.toLowerCase().includes(search)
+                      const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+                      const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+                      return matchesSearch && matchesRegion && matchesCategory
+                    }).length === 0 && (
+                      <div className="empty-state"><strong>No available homes found</strong><span>Try a different search, region, or category.</span></div>
+                    )}
+                  </div>
+                </div>
               )}
-            </div>
+
+              {expandedHomeSection === 'taken' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Taken Homes</h3>
+                    <button onClick={() => setExpandedHomeSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <div className="users-table-wrap">
+                    <table className="users-table homes-table">
+                      <thead>
+                        <tr>
+                          <th>Home</th>
+                          <th>Location</th>
+                          <th>Region</th>
+                          <th>Category</th>
+                          <th>Rent</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {homes.filter(home => {
+                          if (home.available) return false
+                          const search = homeSearch.toLowerCase()
+                          const matchesSearch = !search ||
+                            home.name.toLowerCase().includes(search) ||
+                            home.location.toLowerCase().includes(search) ||
+                            home.type.toLowerCase().includes(search) ||
+                            home.region.toLowerCase().includes(search)
+                          const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+                          const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+                          return matchesSearch && matchesRegion && matchesCategory
+                        }).map((home) => (
+                          <tr key={home.id}>
+                            <td>
+                              <div className="users-table-name">
+                                <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                                <strong>{home.name}</strong>
+                              </div>
+                            </td>
+                            <td>{home.location}</td>
+                            <td>{home.region}</td>
+                            <td>{home.type}</td>
+                            <td>{formatKes(home.price)}/mo</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => { setSelectedHome(home); loadFaqsForHome(home.id) }}
+                                  style={{ padding: '6px 12px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                  View / FAQ
+                                </button>
+                                <button
+                                  onClick={() => { setEditingHome(home); setForm({ name: home.name, location: home.location, region: home.region, type: home.type, parking: home.parking, price: home.price, deposit: home.deposit, image: home.image, tag: home.tag || '', details: home.details || '', customRegion: '' }); setShowForm(true); navigateTo('homes') }}
+                                  style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => toggleAvailability(home)}
+                                  style={{ padding: '6px 12px', fontSize: '12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                  Mark available
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {homes.filter(home => {
+                      if (home.available) return false
+                      const search = homeSearch.toLowerCase()
+                      const matchesSearch = !search ||
+                        home.name.toLowerCase().includes(search) ||
+                        home.location.toLowerCase().includes(search) ||
+                        home.type.toLowerCase().includes(search) ||
+                        home.region.toLowerCase().includes(search)
+                      const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
+                      const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
+                      return matchesSearch && matchesRegion && matchesCategory
+                    }).length === 0 && (
+                      <div className="empty-state"><strong>No taken homes found</strong><span>Try a different search, region, or category.</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

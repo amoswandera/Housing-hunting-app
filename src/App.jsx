@@ -1968,7 +1968,6 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [homeSearch, setHomeSearch] = useState('')
   const [homeRegionFilter, setHomeRegionFilter] = useState('All regions')
   const [homeCategoryFilter, setHomeCategoryFilter] = useState('All categories')
-  const [homeStatusFilter, setHomeStatusFilter] = useState('All') // 'All', 'Available', 'Taken'
   const [applicationSearch, setApplicationSearch] = useState('')
   const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
@@ -1983,6 +1982,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [newUser, setNewUser] = useState(emptyNewUser)
   const [saving, setSaving] = useState(false)
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
+  const [expandedHomeSection, setExpandedHomeSection] = useState(null) // 'available' or 'taken' or null
   const [navigationHistory, setNavigationHistory] = useState(['agent-dashboard']) // Track navigation history for SuperAdmin
 
   const loadData = useCallback(async () => {
@@ -2138,10 +2138,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       (home.agent_name || '').toLowerCase().includes(search)
     const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
     const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
-    const matchesStatus = homeStatusFilter === 'All' ||
-      (homeStatusFilter === 'Available' && home.available) ||
-      (homeStatusFilter === 'Taken' && !home.available)
-    return matchesSearch && matchesRegion && matchesCategory && matchesStatus
+    return matchesSearch && matchesRegion && matchesCategory
   })
 
   const stats = [
@@ -2306,87 +2303,199 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                   <option value="Three bedroom">Three bedroom</option>
                   <option value="Four bedroom">Four bedroom</option>
                 </select>
-                <select
-                  className="role-filter"
-                  value={homeStatusFilter}
-                  onChange={(event) => setHomeStatusFilter(event.target.value)}
-                  aria-label="Filter homes by status"
-                >
-                  <option value="All">All status</option>
-                  <option value="Available">Available</option>
-                  <option value="Taken">Taken</option>
                 </select>
               </div>
-              <div className="users-table-wrap">
-                <table className="users-table homes-table">
-                  <thead>
-                    <tr>
-                      <th>Home</th>
-                      <th>Location</th>
-                      <th>Region</th>
-                      <th>Category</th>
-                      <th>Rent</th>
-                      <th>Status</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredHomes.map((home) => (
-                      <tr key={home.id}>
-                        <td>
-                          <div className="users-table-name">
-                            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-                            <strong>{home.name}</strong>
-                          </div>
-                        </td>
-                        <td>{home.location}</td>
-                        <td>{home.region}</td>
-                        <td>{home.type}</td>
-                        <td>{formatKes(home.price)}/mo</td>
-                        <td>
-                          <span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: home.available ? '#10b981' : '#ef4444', color: 'white' }}>
-                            {home.available ? 'Available' : 'Taken'}
-                          </span>
-                        </td>
-                        <td>
-                          {!home.available && (
-                            <button
-                              style={{ border: 'none', background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, cursor: 'pointer', marginRight: '12px' }}
-                              onClick={async () => {
-                                if (!window.confirm(`Re-list "${home.name}" as available for new tenants?`)) return
-                                try {
-                                  await relistHome(home.id, token)
-                                  setHomes(current => current.map(h => h.id === home.id ? { ...h, available: true } : h))
-                                  onNotify(`${home.name} is now available.`)
-                                } catch (error) { onNotify(error.message) }
-                              }}
-                            >
-                              Re-list ↺
-                            </button>
-                          )}
-                          <button
-                            className="remove-user"
-                            onClick={async () => {
-                              if (!window.confirm(`Permanently delete "${home.name}"? This cannot be undone.`)) return
-                              try {
-                                await deleteSuperAdminHome(home.id, token)
-                                setHomes(current => current.filter(h => h.id !== home.id))
-                                onNotify(`${home.name} was deleted.`)
-                              } catch (error) { onNotify(error.message) }
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              {/* Nested Cards for Homes */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                {/* Available Homes Card */}
+                <div
+                  onClick={() => setExpandedHomeSection(expandedHomeSection === 'available' ? null : 'available')}
+                  style={{
+                    background: '#fff',
+                    padding: '24px',
+                    borderRadius: '8px',
+                    boxShadow: '0 7px 24px rgba(29,53,39,.06)',
+                    cursor: 'pointer',
+                    border: expandedHomeSection === 'available' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '28px', color: '#173d36' }}>⌂</span>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '18px', color: '#173d36' }}>Available Homes</h3>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#7c8981' }}>Homes currently available for tenants</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '28px', color: '#173d36', font: '400 32px Georgia, serif' }}>
+                      {filteredHomes.filter(h => h.available).length}
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#9ba59f' }}>Total available homes</span>
+                  </div>
+                </div>
+
+                {/* Taken Homes Card */}
+                <div
+                  onClick={() => setExpandedHomeSection(expandedHomeSection === 'taken' ? null : 'taken')}
+                  style={{
+                    background: '#fff',
+                    padding: '24px',
+                    borderRadius: '8px',
+                    boxShadow: '0 7px 24px rgba(29,53,39,.06)',
+                    cursor: 'pointer',
+                    border: expandedHomeSection === 'taken' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '28px', color: '#173d36' }}>🏠</span>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '18px', color: '#173d36' }}>Taken Homes</h3>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#7c8981' }}>Homes currently occupied by tenants</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '28px', color: '#173d36', font: '400 32px Georgia, serif' }}>
+                      {filteredHomes.filter(h => !h.available).length}
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#9ba59f' }}>Total taken homes</span>
+                  </div>
+                </div>
               </div>
-              {!loading && filteredHomes.length === 0 && (
-                <div className="empty-state">
-                  <strong>No homes found</strong>
-                  <span>Try a different search, region, or category.</span>
+
+              {/* Expanded Table Views */}
+              {expandedHomeSection === 'available' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Available Homes</h3>
+                    <button onClick={() => setExpandedHomeSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <div className="users-table-wrap">
+                    <table className="users-table homes-table">
+                      <thead>
+                        <tr>
+                          <th>Home</th>
+                          <th>Location</th>
+                          <th>Region</th>
+                          <th>Category</th>
+                          <th>Rent</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredHomes.filter(h => h.available).map((home) => (
+                          <tr key={home.id}>
+                            <td>
+                              <div className="users-table-name">
+                                <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                                <strong>{home.name}</strong>
+                              </div>
+                            </td>
+                            <td>{home.location}</td>
+                            <td>{home.region}</td>
+                            <td>{home.type}</td>
+                            <td>{formatKes(home.price)}/mo</td>
+                            <td>
+                              <button
+                                className="remove-user"
+                                onClick={async () => {
+                                  if (!window.confirm(`Permanently delete "${home.name}"? This cannot be undone.`)) return
+                                  try {
+                                    await deleteSuperAdminHome(home.id, token)
+                                    setHomes(current => current.filter(h => h.id !== home.id))
+                                    onNotify(`${home.name} was deleted.`)
+                                  } catch (error) { onNotify(error.message) }
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filteredHomes.filter(h => h.available).length === 0 && (
+                      <div className="empty-state">
+                        <strong>No available homes found</strong>
+                        <span>Try a different search, region, or category.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {expandedHomeSection === 'taken' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Taken Homes</h3>
+                    <button onClick={() => setExpandedHomeSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
+                  </div>
+                  <div className="users-table-wrap">
+                    <table className="users-table homes-table">
+                      <thead>
+                        <tr>
+                          <th>Home</th>
+                          <th>Location</th>
+                          <th>Region</th>
+                          <th>Category</th>
+                          <th>Rent</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredHomes.filter(h => !h.available).map((home) => (
+                          <tr key={home.id}>
+                            <td>
+                              <div className="users-table-name">
+                                <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: `url(${home.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                                <strong>{home.name}</strong>
+                              </div>
+                            </td>
+                            <td>{home.location}</td>
+                            <td>{home.region}</td>
+                            <td>{home.type}</td>
+                            <td>{formatKes(home.price)}/mo</td>
+                            <td>
+                              <button
+                                style={{ border: 'none', background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, cursor: 'pointer', marginRight: '12px' }}
+                                onClick={async () => {
+                                  if (!window.confirm(`Re-list "${home.name}" as available for new tenants?`)) return
+                                  try {
+                                    await relistHome(home.id, token)
+                                    setHomes(current => current.map(h => h.id === home.id ? { ...h, available: true } : h))
+                                    onNotify(`${home.name} is now available.`)
+                                  } catch (error) { onNotify(error.message) }
+                                }}
+                              >
+                                Re-list ↺
+                              </button>
+                              <button
+                                className="remove-user"
+                                onClick={async () => {
+                                  if (!window.confirm(`Permanently delete "${home.name}"? This cannot be undone.`)) return
+                                  try {
+                                    await deleteSuperAdminHome(home.id, token)
+                                    setHomes(current => current.filter(h => h.id !== home.id))
+                                    onNotify(`${home.name} was deleted.`)
+                                  } catch (error) { onNotify(error.message) }
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filteredHomes.filter(h => !h.available).length === 0 && (
+                      <div className="empty-state">
+                        <strong>No taken homes found</strong>
+                        <span>Try a different search, region, or category.</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
