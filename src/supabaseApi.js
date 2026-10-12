@@ -522,6 +522,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       building_name: buildingsData[home.building_id]?.name || null,
       building_location: buildingsData[home.building_id]?.location || null,
       building_region: buildingsData[home.building_id]?.region || null,
+      building_images: buildingImagesByBuilding[home.building_id] || [],
     }
   })
 }
@@ -1835,7 +1836,40 @@ export const fetchBuildings = async (token) => {
     .order('created_at', { ascending: false })
 
   handleSupabaseError(error)
-  return data || []
+
+  // Fetch building images for each building
+  const buildingIds = (data || []).map(b => b.id)
+  let buildingImagesByBuilding = {}
+
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildingImages } = await supabase
+        .from('building_images')
+        .select('*')
+        .in('building_id', buildingIds)
+        .order('order_index', { ascending: true })
+
+      if (buildingImages) {
+        buildingImages.forEach(img => {
+          if (!buildingImagesByBuilding[img.building_id]) {
+            buildingImagesByBuilding[img.building_id] = []
+          }
+          buildingImagesByBuilding[img.building_id].push({
+            ...img,
+            url: img.image_url || '',
+          })
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building images:', error)
+    }
+  }
+
+  // Merge images into building data
+  return (data || []).map(building => ({
+    ...building,
+    images: buildingImagesByBuilding[building.id] || []
+  }))
 }
 
 export const addUnitToBuilding = async (buildingId, unitData, unitImages, token) => {
@@ -1973,5 +2007,18 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
   const { data, error } = await query.order('unit_number', { ascending: true })
 
   handleSupabaseError(error)
-  return data || []
+
+  // Fetch building images for these units
+  let buildingImages = []
+  try {
+    buildingImages = await fetchBuildingImages(buildingId)
+  } catch (error) {
+    console.log('Error fetching building images:', error)
+  }
+
+  // Merge building images into unit data
+  return (data || []).map(unit => ({
+    ...unit,
+    building_images: buildingImages
+  }))
 }

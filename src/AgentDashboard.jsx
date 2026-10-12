@@ -1559,22 +1559,38 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 </tr>
               </thead>
               <tbody>
-                {buildings.map((building) => (
-                  <tr key={building.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>{building.name}</td>
-                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
-                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
-                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
-                    <td style={{ padding: '12px' }}>
-                      <button
-                        onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
-                        style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
-                      >
-                        + Add Unit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {buildings.map((building) => {
+                  const primaryImage = building.images && building.images.length > 0
+                    ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
+                    : ''
+                  return (
+                    <tr key={building.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {primaryImage && (
+                            <img
+                              src={primaryImage}
+                              alt={building.name}
+                              style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                            />
+                          )}
+                          <span>{building.name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
+                      <td style={{ padding: '12px' }}>
+                        <button
+                          onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
+                          style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                        >
+                          + Add Unit
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

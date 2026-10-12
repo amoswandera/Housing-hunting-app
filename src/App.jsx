@@ -498,7 +498,8 @@ function App() {
             availableUnits: 0,
             minPrice: Infinity,
             maxPrice: 0,
-            categories: new Set()
+            categories: new Set(),
+            images: home.building_images || []
           }
         }
         buildingMap[home.building_id].units.push(home)
@@ -522,6 +523,11 @@ function App() {
   const standaloneHomes = useMemo(() => {
     return homes.filter(home => !home.building_id)
   }, [homes])
+
+  // Filtered homes for display - exclude building units since they're shown in building cards
+  const filteredHomesForDisplay = useMemo(() => {
+    return filteredHomes.filter(home => !home.building_id)
+  }, [filteredHomes])
 
   const filteredHomes = useMemo(() => {
     let result = homes.filter((home) => {
@@ -742,7 +748,10 @@ function App() {
   const renderHomeCard = (home) => <article className="home-card" key={home.id}><div className="image-wrap" role="button" tabIndex={0} onClick={() => setSelectedHome(home)} onKeyDown={(event) => event.key === 'Enter' && setSelectedHome(home)}><img src={home.image} alt={`${home.name} interior`} /><span className="home-tag">{home.tag}</span><span className="photo-hint">View photos ↗</span><button className={`save-button ${saved.includes(home.id) ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSaved(home.id) }} aria-label={`Save ${home.name}`}>{saved.includes(home.id) ? '♥' : '♡'}</button></div><div className="home-info"><div className="home-title"><div><h3>{home.name}</h3><p>{home.location}</p></div>{home.rating ? <span className="rating">★ {home.rating}</span> : null}</div><p className="home-details">{home.type} <span>·</span> {home.details}</p><p className={`parking-status ${home.parking ? 'available' : 'unavailable'}`}>{home.parking ? '✓ Parking available' : '× No parking available'}</p><div className="home-footer"><div><strong>{formatKes(home.price)}</strong><span>/ month</span></div><div className="home-actions"><button onClick={() => setSelectedHome(home)}>View home <span>↗</span></button><a href={getDirectionsUrl(home)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>Directions ↗</a></div></div></div></article>
 
   const renderBuildingCard = (building) => {
-    const primaryImage = building.units.length > 0 ? building.units[0].image : ''
+    // Use building images if available, otherwise fall back to first unit image
+    const primaryImage = building.images && building.images.length > 0
+      ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
+      : (building.units.length > 0 ? building.units[0].image : '')
     const priceRange = building.minPrice === building.maxPrice
       ? formatKes(building.minPrice)
       : `${formatKes(building.minPrice)} – ${formatKes(building.maxPrice)}`
@@ -916,16 +925,16 @@ function App() {
           {activeView === 'discover' && !showTenantProfile && <>
           <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
           <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); setHomePage(1) }} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => { setRegion(event.target.value); setHomePage(1) }}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => { setCategory(event.target.value); setHomePage(1) }}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => { setPriceRange(event.target.value); setHomePage(1) }}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><div className="select-field category-select"><span>⇅</span><select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setHomePage(1) }}><option value="default">Default order</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="newest">Newest first</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
-          <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomes.length} available home{filteredHomes.length !== 1 ? 's' : ''}</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
+          <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomesForDisplay.length + buildingsWithUnits.length} available home{filteredHomesForDisplay.length + buildingsWithUnits.length !== 1 ? 's' : ''}</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
           <section className="home-grid">
             {buildingsWithUnits.map(renderBuildingCard)}
-            {filteredHomes.map(renderHomeCard)}
+            {filteredHomesForDisplay.map(renderHomeCard)}
           </section>
-          {filteredHomes.length === 0 && buildingsWithUnits.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
-          {filteredHomes.length > homePage * PAGE_SIZE && (
+          {filteredHomesForDisplay.length === 0 && buildingsWithUnits.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
+          {filteredHomesForDisplay.length > homePage * PAGE_SIZE && (
             <div style={{ textAlign: 'center', margin: '24px 0' }}>
               <button onClick={() => setHomePage(p => p + 1)} style={{ background: 'none', border: '1px solid #d2ded5', color: '#3e735e', borderRadius: '6px', padding: '10px 28px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                Load more homes ({filteredHomes.length - homePage * PAGE_SIZE} remaining)
+                Load more homes ({filteredHomesForDisplay.length - homePage * PAGE_SIZE} remaining)
               </button>
             </div>
           )}
@@ -1427,42 +1436,48 @@ function App() {
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: '16px' }}>
-                  {buildingUnits.map((unit) => (
-                    <div
-                      key={unit.id}
-                      style={{
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        padding: '16px',
-                        display: 'flex',
-                        gap: '16px',
-                        cursor: 'pointer',
-                        transition: 'border-color 0.2s'
-                      }}
-                      onClick={() => { setSelectedHome(unit); setShowUnitSelection(false) }}
-                      onMouseEnter={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                      onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
-                    >
-                      <img
-                        src={unit.image}
-                        alt={unit.name}
-                        style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px' }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                          <div>
-                            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{unit.unit_number}</h4>
-                            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>{unit.category} · {unit.floor}</p>
+                  {buildingUnits.map((unit) => {
+                    // Use building images if unit has no image
+                    const unitImage = unit.image || (unit.building_images && unit.building_images.length > 0
+                      ? (unit.building_images.find(i => i.is_primary)?.url || unit.building_images[0].url)
+                      : '')
+                    return (
+                      <div
+                        key={unit.id}
+                        style={{
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          padding: '16px',
+                          display: 'flex',
+                          gap: '16px',
+                          cursor: 'pointer',
+                          transition: 'border-color 0.2s'
+                        }}
+                        onClick={() => { setSelectedHome(unit); setShowUnitSelection(false) }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
+                      >
+                        <img
+                          src={unitImage}
+                          alt={unit.name}
+                          style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{unit.unit_number}</h4>
+                              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>{unit.category} · {unit.floor}</p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <strong style={{ fontSize: '16px', color: '#1d3d33' }}>{formatKes(unit.price)}</strong>
+                              <span style={{ fontSize: '12px', color: '#6b7280' }}>/mo</span>
+                            </div>
                           </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <strong style={{ fontSize: '16px', color: '#1d3d33' }}>{formatKes(unit.price)}</strong>
-                            <span style={{ fontSize: '12px', color: '#6b7280' }}>/mo</span>
-                          </div>
+                          {unit.details && <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#6b7280', lineHeight: 1.4 }}>{unit.details}</p>}
                         </div>
-                        {unit.details && <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#6b7280', lineHeight: 1.4 }}>{unit.details}</p>}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
