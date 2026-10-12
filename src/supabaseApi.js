@@ -370,17 +370,12 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   if (buildingIds.length > 0) {
     try {
       // Fetch building details (without RLS blocking)
-      const { data: buildings, error: buildingError } = await supabase
+      const { data: buildings } = await supabase
         .from('buildings')
         .select('*')
         .in('id', buildingIds)
 
-      if (buildingError) {
-        console.log('Error fetching building details:', buildingError)
-      }
-
       if (buildings) {
-        console.log('Fetched buildings:', buildings)
         buildings.forEach(b => {
           buildingsData[b.id] = b
         })

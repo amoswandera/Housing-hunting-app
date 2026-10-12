@@ -504,7 +504,6 @@ function App() {
             categories: new Set(),
             images: home.building_images || []
           }
-          console.log('Created building entry:', buildingMap[home.building_id], 'from home:', home)
         }
         buildingMap[home.building_id].units.push(home)
         buildingMap[home.building_id].totalUnits++
@@ -788,7 +787,6 @@ function App() {
             src={primaryImage || ''} 
             alt={`${building.name} exterior`}
             onError={(e) => {
-              console.error('Building image failed to load:', primaryImage, 'Building:', building)
               e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
             }}
           />
@@ -1290,7 +1288,6 @@ function App() {
                       src={imageUrl || ''}
                       alt={`${selectedHome.name} interior`}
                       onError={(e) => {
-                        console.error('Image failed to load:', imageUrl, 'Selected home:', selectedHome)
                         e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
                       }}
                     />
@@ -1503,9 +1500,6 @@ function App() {
                       url: extractUrl(img)
                     }))
                     
-                    // Debug logging
-                    console.log('Unit data:', { unit, unitImages, buildingImgs, finalImages, normalizedImages, unitImage })
-                    
                     // Prepare unit object with proper image data for the modal
                     const unitForModal = {
                       ...unit,
@@ -1536,7 +1530,6 @@ function App() {
                           alt={unit.name}
                           style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px' }}
                           onError={(e) => {
-                            console.error('Unit thumbnail failed to load:', unitImage)
                             e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
                           }}
                         />
@@ -1585,7 +1578,6 @@ function App() {
                       src={imageUrl || ''}
                       alt={`${selectedBuilding.name} exterior`}
                       onError={(e) => {
-                        console.error('Building image failed to load:', imageUrl)
                         e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
                       }}
                     />
