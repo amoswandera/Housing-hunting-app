@@ -2126,6 +2126,9 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   })
 
   const filteredHomes = homes.filter((home) => {
+    // Exclude building units (homes with building_id)
+    if (home.building_id) return false
+
     const search = homeSearch.trim().toLowerCase()
     const matchesSearch = !search ||
       home.name.toLowerCase().includes(search) ||
@@ -2145,7 +2148,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
     { label: 'Total users', value: overview?.users, view: 'users', roleFilter: 'All' },
     { label: 'Tenants', value: overview?.tenants, view: 'users', roleFilter: 'Tenant' },
     { label: 'Agents', value: overview?.agents, view: 'users', roleFilter: 'Agent' },
-    { label: 'Homes', value: overview?.homes, view: 'homes' },
+    { label: 'Homes', value: homes.filter(h => !h.building_id).length, view: 'homes' },
     { label: 'Buildings', value: buildings.length, view: 'buildings' },
     { label: 'Applications', value: overview?.applications, view: 'applications' },
     { label: 'Deposit payments', value: overview?.payments, view: 'payments' },
