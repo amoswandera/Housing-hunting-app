@@ -1977,6 +1977,8 @@ export const addUnitToBuilding = async (buildingId, unitData, unitImages, token)
   handleSupabaseError(homeError)
 
   // Upload unit-specific images if provided
+  // If no unit images provided, the unit will have no custom images
+  // Display logic will fall back to building images
   if (unitImages && unitImages.length > 0) {
     for (let i = 0; i < unitImages.length; i++) {
       const image = unitImages[i]
@@ -2071,6 +2073,35 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
 
   handleSupabaseError(error)
 
+  // Get all unit IDs
+  const unitIds = (data || []).map(u => u.id)
+
+  // Fetch unit-specific images from home_images
+  let unitImagesByUnit = {}
+  if (unitIds.length > 0) {
+    try {
+      const { data: unitImagesData } = await supabase
+        .from('home_images')
+        .select('*')
+        .in('home_id', unitIds)
+        .order('order_index', { ascending: true })
+
+      if (unitImagesData) {
+        unitImagesData.forEach(img => {
+          if (!unitImagesByUnit[img.home_id]) {
+            unitImagesByUnit[img.home_id] = []
+          }
+          unitImagesByUnit[img.home_id].push({
+            ...img,
+            url: img.image_url || img.url || img.image || ''
+          })
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching unit images:', error)
+    }
+  }
+
   // Fetch building images for these units
   let buildingImages = []
   try {
@@ -2079,7 +2110,6 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
     console.log('Error fetching building images:', error)
   }
 
-  // Merge building images into unit data
   // Normalize building images to have url field
   const normalizedBuildingImages = buildingImages.map(img => ({
     ...img,
@@ -2088,6 +2118,7 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
   
   return (data || []).map(unit => ({
     ...unit,
+    images: unitImagesByUnit[unit.id] || [],
     building_images: normalizedBuildingImages
   }))
 }

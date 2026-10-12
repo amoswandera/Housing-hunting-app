@@ -1459,13 +1459,12 @@ function App() {
               ) : (
                 <div style={{ display: 'grid', gap: '16px' }}>
                   {buildingUnits.map((unit) => {
-                    // Prepare unit with proper image data for the detail modal
+                    // Unit images are now fetched from home_images table in fetchUnitsInBuilding
                     const unitImages = unit.images || []
                     const buildingImgs = unit.building_images || []
-                    let finalImages = unitImages
-                    if (unitImages.length === 0 && buildingImgs.length > 0) {
-                      finalImages = buildingImgs
-                    }
+                    
+                    // Use unit's custom images if available, otherwise fall back to building images
+                    let finalImages = unitImages.length > 0 ? unitImages : buildingImgs
                     if (finalImages.length === 0) {
                       finalImages = [{ url: unit.image, is_primary: true, order_index: 0 }]
                     }
