@@ -326,6 +326,9 @@ function App() {
   const [buildingUnits, setBuildingUnits] = useState([])
   const [unitFilterCategory, setUnitFilterCategory] = useState('All')
   const [unitFilterFloor, setUnitFilterFloor] = useState('All')
+  const [showBuildingDetail, setShowBuildingDetail] = useState(false)
+  const [buildingDetailImages, setBuildingDetailImages] = useState([])
+  const [buildingDetailImageIndex, setBuildingDetailImageIndex] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [readNotifications, setReadNotifications] = useState(new Set())
   // Messaging state
@@ -593,6 +596,20 @@ function App() {
     }
   }
 
+  const openBuildingDetail = async (building) => {
+    try {
+      const images = await fetchBuildingImages(building.id)
+      setBuildingDetailImages(images.map(img => ({
+        ...img,
+        url: img.image_url || img.url || img.image || ''
+      })))
+      setSelectedBuilding(building)
+      setShowBuildingDetail(true)
+    } catch (error) {
+      showToast('Failed to load building details')
+    }
+  }
+
   const submitBooking = async () => {
     const home = applyConfirm
     const message = applyMessage.trim() || 'I would like to apply for this home.'
@@ -794,6 +811,12 @@ function App() {
             </div>
             <div className="home-actions">
               <button onClick={() => openBuildingUnits(building)}>View units <span>↗</span></button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); openBuildingDetail(building) }}
+                style={{ padding: '0', background: 'none', color: '#dd785e', fontSize: '10px', textDecoration: 'underline', marginLeft: '8px' }}
+              >
+                View building photos
+              </button>
             </div>
           </div>
         </div>
@@ -1534,6 +1557,99 @@ function App() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Building Detail Modal */}
+      {showBuildingDetail && selectedBuilding && (
+        <div className="modal-backdrop" onClick={() => { setShowBuildingDetail(false); setSelectedBuilding(null); setBuildingDetailImages([]) }}>
+          <div className="booking-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="close-button" onClick={() => { setShowBuildingDetail(false); setSelectedBuilding(null); setBuildingDetailImages([]) }}>×</button>
+            
+            {/* Image Gallery */}
+            <div className="image-gallery-container">
+              {(() => {
+                const hasImages = buildingDetailImages && buildingDetailImages.length > 0
+                const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
+                const imageUrl = hasImages
+                  ? extractUrl(buildingDetailImages[buildingDetailImageIndex] || buildingDetailImages[0])
+                  : ''
+                
+                return (
+                  <>
+                    <img 
+                      className="modal-home-image" 
+                      src={imageUrl || ''}
+                      alt={`${selectedBuilding.name} exterior`}
+                      onError={(e) => {
+                        console.error('Building image failed to load:', imageUrl)
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
+                      }}
+                    />
+                    {/* Image Navigation */}
+                    {hasImages && buildingDetailImages.length > 1 && (
+                      <>
+                        <button 
+                          className="gallery-nav-btn gallery-prev-btn"
+                          onClick={() => setBuildingDetailImageIndex((prev) => prev === 0 ? buildingDetailImages.length - 1 : prev - 1)}
+                        >
+                          ‹
+                        </button>
+                        <button 
+                          className="gallery-nav-btn gallery-next-btn"
+                          onClick={() => setBuildingDetailImageIndex((prev) => (prev + 1) % buildingDetailImages.length)}
+                        >
+                          ›
+                        </button>
+                        {/* Thumbnails */}
+                        <div className="gallery-thumbnails">
+                          {buildingDetailImages.map((img, index) => (
+                            <img
+                              key={index}
+                              src={extractUrl(img)}
+                              alt={`Thumbnail ${index + 1}`}
+                              className={`gallery-thumbnail ${index === buildingDetailImageIndex ? 'active' : ''}`}
+                              onClick={() => setBuildingDetailImageIndex(index)}
+                            />
+                          ))}
+                        </div>
+                        <div className="gallery-counter">
+                          {buildingDetailImageIndex + 1} / {buildingDetailImages.length}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+            
+            <div className="modal-content">
+              <p className="eyebrow">{selectedBuilding.location}</p>
+              <h2>{selectedBuilding.name}</h2>
+              <p style={{ color: '#718078', lineHeight: 1.7, fontSize: '11px', marginBottom: '16px' }}>
+                {selectedBuilding.availableUnits} units available · {selectedBuilding.total_units} total units
+              </p>
+              {selectedBuilding.description && (
+                <p style={{ color: '#718078', lineHeight: 1.7, fontSize: '11px', marginBottom: '16px' }}>
+                  {selectedBuilding.description}
+                </p>
+              )}
+              {selectedBuilding.amenities && (
+                <div style={{ marginBottom: '16px' }}>
+                  <p style={{ fontWeight: 600, fontSize: '12px', marginBottom: '8px' }}>Amenities:</p>
+                  <p style={{ color: '#718078', fontSize: '11px' }}>{selectedBuilding.amenities}</p>
+                </div>
+              )}
+              <div style={{ marginTop: '24px' }}>
+                <button 
+                  className="primary-action" 
+                  onClick={() => { setShowBuildingDetail(false); openBuildingUnits(selectedBuilding) }}
+                >
+                  View available units <span>→</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
