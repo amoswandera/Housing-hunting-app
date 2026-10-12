@@ -2381,48 +2381,34 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                     <option value="Four bedroom">Four bedroom</option>
                   </select>
                 </div>
-                <div className="users-table-wrap">
-                  <table className="users-table applications-table">
-                    <thead>
-                      <tr>
-                        <th>Tenant</th>
-                        <th>Home</th>
-                        <th>Location</th>
-                        <th>Region</th>
-                        <th>Category</th>
-                        <th>Deposit</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {applications.filter(app => {
-                        const isHomeApp = !app.homes?.building_id
-                        const search = applicationSearch.toLowerCase()
-                        const matchesSearch = !search ||
-                          (app.profiles?.name || '').toLowerCase().includes(search) ||
-                          (app.homes?.name || '').toLowerCase().includes(search) ||
-                          (app.homes?.location || '').toLowerCase().includes(search)
-                        const matchesRegion = applicationRegionFilter === 'All regions' || (app.homes?.region || '') === applicationRegionFilter
-                        const matchesCategory = applicationCategoryFilter === 'All categories' || (app.homes?.type || '') === applicationCategoryFilter
-                        return isHomeApp && matchesSearch && matchesRegion && matchesCategory
-                      }).map((app) => (
-                        <tr key={app.id}>
-                          <td>
-                            <div className="users-table-name">
-                              <div className="avatar">{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                              <strong>{app.profiles?.name || 'Tenant'}</strong>
-                            </div>
-                          </td>
-                          <td>{app.homes?.name || '—'}</td>
-                          <td>{app.homes?.location || '—'}</td>
-                          <td>{app.homes?.region || '—'}</td>
-                          <td>{app.homes?.type || '—'}</td>
-                          <td>{formatKes(app.homes?.deposit || 0)}</td>
-                          <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: getStatusColor(app.status), color: 'white' }}>{app.status}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                  {applications.filter(app => {
+                    const isHomeApp = !app.homes?.building_id
+                    const search = applicationSearch.toLowerCase()
+                    const matchesSearch = !search ||
+                      (app.profiles?.name || '').toLowerCase().includes(search) ||
+                      (app.homes?.name || '').toLowerCase().includes(search) ||
+                      (app.homes?.location || '').toLowerCase().includes(search)
+                    const matchesRegion = applicationRegionFilter === 'All regions' || (app.homes?.region || '') === applicationRegionFilter
+                    const matchesCategory = applicationCategoryFilter === 'All categories' || (app.homes?.type || '') === applicationCategoryFilter
+                    return isHomeApp && matchesSearch && matchesRegion && matchesCategory
+                  }).map((app) => (
+                    <div key={app.id} style={{ background: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px' }}>{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                        <div style={{ flex: 1 }}>
+                          <strong style={{ fontSize: '14px', display: 'block' }}>{app.profiles?.name || 'Tenant'}</strong>
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>{app.homes?.name || '—'}</span>
+                        </div>
+                        <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '11px', background: getStatusColor(app.status), color: 'white', textTransform: 'capitalize' }}>{app.status}</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                        <div>📍 {app.homes?.location || '—'}</div>
+                        <div>🏷️ {app.homes?.type || '—'}</div>
+                        <div>💰 {formatKes(app.homes?.deposit || 0)} deposit</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 {!loading && applications.filter(app => {
                   const isHomeApp = !app.homes?.building_id
@@ -2480,48 +2466,34 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                     <option value="Four bedroom">Four bedroom</option>
                   </select>
                 </div>
-                <div className="users-table-wrap">
-                  <table className="users-table applications-table">
-                    <thead>
-                      <tr>
-                        <th>Tenant</th>
-                        <th>Building - Unit</th>
-                        <th>Location</th>
-                        <th>Region</th>
-                        <th>Category</th>
-                        <th>Deposit</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {applications.filter(app => {
-                        const isBuildingApp = app.homes?.building_id
-                        const search = applicationSearch.toLowerCase()
-                        const matchesSearch = !search ||
-                          (app.profiles?.name || '').toLowerCase().includes(search) ||
-                          (app.homes?.name || '').toLowerCase().includes(search) ||
-                          (app.homes?.location || '').toLowerCase().includes(search)
-                        const matchesRegion = applicationRegionFilter === 'All regions' || (app.homes?.region || '') === applicationRegionFilter
-                        const matchesCategory = applicationCategoryFilter === 'All categories' || (app.homes?.type || '') === applicationCategoryFilter
-                        return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
-                      }).map((app) => (
-                        <tr key={app.id}>
-                          <td>
-                            <div className="users-table-name">
-                              <div className="avatar">{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                              <strong>{app.profiles?.name || 'Tenant'}</strong>
-                            </div>
-                          </td>
-                          <td>{app.homes?.name || '—'}</td>
-                          <td>{app.homes?.location || '—'}</td>
-                          <td>{app.homes?.region || '—'}</td>
-                          <td>{app.homes?.type || '—'}</td>
-                          <td>{formatKes(app.homes?.deposit || 0)}</td>
-                          <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: getStatusColor(app.status), color: 'white' }}>{app.status}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                  {applications.filter(app => {
+                    const isBuildingApp = app.homes?.building_id
+                    const search = applicationSearch.toLowerCase()
+                    const matchesSearch = !search ||
+                      (app.profiles?.name || '').toLowerCase().includes(search) ||
+                      (app.homes?.name || '').toLowerCase().includes(search) ||
+                      (app.homes?.location || '').toLowerCase().includes(search)
+                    const matchesRegion = applicationRegionFilter === 'All regions' || (app.homes?.region || '') === applicationRegionFilter
+                    const matchesCategory = applicationCategoryFilter === 'All categories' || (app.homes?.type || '') === applicationCategoryFilter
+                    return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
+                  }).map((app) => (
+                    <div key={app.id} style={{ background: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px' }}>{app.profiles?.name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                        <div style={{ flex: 1 }}>
+                          <strong style={{ fontSize: '14px', display: 'block' }}>{app.profiles?.name || 'Tenant'}</strong>
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>{app.homes?.name || '—'}</span>
+                        </div>
+                        <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '11px', background: getStatusColor(app.status), color: 'white', textTransform: 'capitalize' }}>{app.status}</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                        <div>📍 {app.homes?.location || '—'}</div>
+                        <div>🏷️ {app.homes?.type || '—'}</div>
+                        <div>💰 {formatKes(app.homes?.deposit || 0)} deposit</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 {!loading && applications.filter(app => {
                   const isBuildingApp = app.homes?.building_id

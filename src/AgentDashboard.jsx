@@ -1006,54 +1006,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             {applications.filter(app => !app.building_id).length === 0 ? (
               <div className="empty-state"><strong>No home applications yet</strong><span>Applications for standalone homes will appear here.</span></div>
             ) : (
-              <div className="users-table-wrap">
-                <table className="users-table applications-table">
-                  <thead>
-                    <tr>
-                      <th>Tenant</th>
-                      <th>Home</th>
-                      <th>Location</th>
-                      <th>Region</th>
-                      <th>Category</th>
-                      <th>Deposit</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applications.filter(app => {
-                      const isHomeApp = !app.building_id
-                      const search = applicationSearch.toLowerCase()
-                      const matchesSearch = !search ||
-                        (app.tenant_name || '').toLowerCase().includes(search) ||
-                        (app.name || '').toLowerCase().includes(search) ||
-                        (app.location || '').toLowerCase().includes(search)
-                      const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
-                      const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
-                      return isHomeApp && matchesSearch && matchesRegion && matchesCategory
-                    }).map((application) => (
-                      <tr key={application.id}>
-                        <td>
-                          <div className="users-table-name">
-                            <div className="avatar">{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                            <strong>{application.tenant_name || 'Tenant'}</strong>
-                          </div>
-                        </td>
-                        <td>{application.name || '—'}</td>
-                        <td>{application.location || '—'}</td>
-                        <td>{application.region || '—'}</td>
-                        <td>{application.type || '—'}</td>
-                        <td>{formatKes(application.deposit)}</td>
-                        <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white' }}>{application.status}</span></td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            <button onClick={() => viewApplicationDetail(application)} style={{ padding: '6px 14px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View →</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                 {applications.filter(app => {
                   const isHomeApp = !app.building_id
                   const search = applicationSearch.toLowerCase()
@@ -1064,10 +1017,38 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
                   const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
                   return isHomeApp && matchesSearch && matchesRegion && matchesCategory
-                }).length === 0 && (
-                  <div className="empty-state"><strong>No home applications found</strong><span>Try a different search, region, or category.</span></div>
-                )}
+                }).map((application) => (
+                  <div key={application.id} style={{ background: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                      <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px' }}>{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '14px', display: 'block' }}>{application.tenant_name || 'Tenant'}</strong>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{application.name || '—'}</span>
+                      </div>
+                      <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '11px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white', textTransform: 'capitalize' }}>{application.status}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                      <div>📍 {application.location || '—'}</div>
+                      <div>🏷️ {application.type || '—'}</div>
+                      <div>💰 {formatKes(application.deposit)} deposit</div>
+                    </div>
+                    <button onClick={() => viewApplicationDetail(application)} style={{ width: '100%', padding: '8px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>View Application →</button>
+                  </div>
+                ))}
               </div>
+            )}
+            {applications.filter(app => {
+              const isHomeApp = !app.building_id
+              const search = applicationSearch.toLowerCase()
+              const matchesSearch = !search ||
+                (app.tenant_name || '').toLowerCase().includes(search) ||
+                (app.name || '').toLowerCase().includes(search) ||
+                (app.location || '').toLowerCase().includes(search)
+              const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
+              const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
+              return isHomeApp && matchesSearch && matchesRegion && matchesCategory
+            }).length === 0 && (
+              <div className="empty-state"><strong>No home applications found</strong><span>Try a different search, region, or category.</span></div>
             )}
           </div>
 
@@ -1113,54 +1094,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             {applications.filter(app => app.building_id).length === 0 ? (
               <div className="empty-state"><strong>No building applications yet</strong><span>Applications for building units will appear here.</span></div>
             ) : (
-              <div className="users-table-wrap">
-                <table className="users-table applications-table">
-                  <thead>
-                    <tr>
-                      <th>Tenant</th>
-                      <th>Building - Unit</th>
-                      <th>Location</th>
-                      <th>Region</th>
-                      <th>Category</th>
-                      <th>Deposit</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applications.filter(app => {
-                      const isBuildingApp = app.building_id
-                      const search = applicationSearch.toLowerCase()
-                      const matchesSearch = !search ||
-                        (app.tenant_name || '').toLowerCase().includes(search) ||
-                        (app.name || '').toLowerCase().includes(search) ||
-                        (app.location || '').toLowerCase().includes(search)
-                      const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
-                      const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
-                      return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
-                    }).map((application) => (
-                      <tr key={application.id}>
-                        <td>
-                          <div className="users-table-name">
-                            <div className="avatar">{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
-                            <strong>{application.tenant_name || 'Tenant'}</strong>
-                          </div>
-                        </td>
-                        <td>{application.name || '—'}</td>
-                        <td>{application.location || '—'}</td>
-                        <td>{application.region || '—'}</td>
-                        <td>{application.type || '—'}</td>
-                        <td>{formatKes(application.deposit)}</td>
-                        <td><span className="role-static" style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white' }}>{application.status}</span></td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            <button onClick={() => viewApplicationDetail(application)} style={{ padding: '6px 14px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>View →</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                 {applications.filter(app => {
                   const isBuildingApp = app.building_id
                   const search = applicationSearch.toLowerCase()
@@ -1171,10 +1105,38 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
                   const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
                   return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
-                }).length === 0 && (
-                  <div className="empty-state"><strong>No building applications found</strong><span>Try a different search, region, or category.</span></div>
-                )}
+                }).map((application) => (
+                  <div key={application.id} style={{ background: '#fff', borderRadius: '8px', padding: '16px', border: '1px solid #e5e7eb', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                      <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px' }}>{application.tenant_name?.slice(0, 2).toUpperCase() || 'T'}</div>
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '14px', display: 'block' }}>{application.tenant_name || 'Tenant'}</strong>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{application.name || '—'}</span>
+                      </div>
+                      <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '11px', background: application.status === 'approved' ? '#10b981' : application.status === 'declined' ? '#ef4444' : '#f59e0b', color: 'white', textTransform: 'capitalize' }}>{application.status}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                      <div>📍 {application.location || '—'}</div>
+                      <div>🏷️ {application.type || '—'}</div>
+                      <div>💰 {formatKes(application.deposit)} deposit</div>
+                    </div>
+                    <button onClick={() => viewApplicationDetail(application)} style={{ width: '100%', padding: '8px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>View Application →</button>
+                  </div>
+                ))}
               </div>
+            )}
+            {applications.filter(app => {
+              const isBuildingApp = app.building_id
+              const search = applicationSearch.toLowerCase()
+              const matchesSearch = !search ||
+                (app.tenant_name || '').toLowerCase().includes(search) ||
+                (app.name || '').toLowerCase().includes(search) ||
+                (app.location || '').toLowerCase().includes(search)
+              const matchesRegion = applicationRegionFilter === 'All regions' || (app.region || '') === applicationRegionFilter
+              const matchesCategory = applicationCategoryFilter === 'All categories' || (app.type || '') === applicationCategoryFilter
+              return isBuildingApp && matchesSearch && matchesRegion && matchesCategory
+            }).length === 0 && (
+              <div className="empty-state"><strong>No building applications found</strong><span>Try a different search, region, or category.</span></div>
             )}
           </div>
         </>
