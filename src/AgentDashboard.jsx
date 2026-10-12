@@ -957,7 +957,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏠</div>
                   <h3 style={{ margin: '0 0 8px', color: '#173d36', fontSize: '18px' }}>Taken Homes</h3>
                   <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '13px' }}>Homes currently occupied by tenants</p>
-                  <div style={{ fontSize: '36px', fontWeight: 700', color: '#173d36' }}>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: '#173d36' }}>
                     {homes.filter(h => !h.available && (
                       (homeSearch === '' || h.name.toLowerCase().includes(homeSearch.toLowerCase()) || h.location.toLowerCase().includes(homeSearch.toLowerCase())) &&
                       (homeRegionFilter === 'All regions' || h.region === homeRegionFilter) &&
