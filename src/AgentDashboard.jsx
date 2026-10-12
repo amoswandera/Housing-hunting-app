@@ -53,7 +53,8 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
   const [selectedHome, setSelectedHome] = useState(null)
-  const [internalView, setInternalView] = useState(view) // 'homes', 'applications', or 'buildings'
+  const [internalView, setInternalView] = useState(view === 'profile' ? 'profile' : 'dashboard') // 'dashboard', 'homes', 'applications', 'buildings', or 'profile'
+  const [homeStatusFilter, setHomeStatusFilter] = useState('All') // 'All', 'Available', 'Taken'
   const [showBuildingForm, setShowBuildingForm] = useState(false)
   const [showAddUnitForm, setShowAddUnitForm] = useState(false)
   const [selectedBuilding, setSelectedBuilding] = useState(null)
@@ -565,9 +566,18 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
 
       {/* Internal navigation for switching views */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <button 
+        <button
+          onClick={() => { setInternalView('dashboard'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
+          style={{
+            padding: '10px 20px', borderRadius: '8px', border: internalView === 'dashboard' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
+            ':hover': { background: '#f9fafb' }
+          }}
+        >
+          📊 Dashboard
+        </button>
+        <button
           onClick={() => { setInternalView('homes'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
-          style={{ 
+          style={{
             padding: '10px 20px', borderRadius: '8px', border: internalView === 'homes' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
             ':hover': { background: '#f9fafb' }
           }}
@@ -593,6 +603,77 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
           🏢 Buildings
         </button>
       </div>
+
+      {/* Dashboard View - Card Display */}
+      {internalView === 'dashboard' && !showProfile && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+          {/* Homes Card */}
+          <div
+            onClick={() => setInternalView('homes')}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Homes</h3>
+            <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Manage your property listings</p>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{homes.length}</div>
+            <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total homes</p>
+          </div>
+
+          {/* Applications Card */}
+          <div
+            onClick={() => setInternalView('applications')}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Applications</h3>
+            <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Review tenant applications</p>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{applications.length}</div>
+            <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total applications</p>
+          </div>
+
+          {/* Buildings Card */}
+          <div
+            onClick={() => setInternalView('buildings')}
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Buildings</h3>
+            <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Manage multi-unit buildings</p>
+            <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{buildings.length}</div>
+            <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total buildings</p>
+          </div>
+        </div>
+      )}
 
       {showProfile && (
         <form className="listing-form profile-form" onSubmit={saveProfile}>
@@ -782,32 +863,46 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               <span>⌕</span>
               <input
                 value={homeSearch}
-                onChange={(event) => setHomeSearch(event.target.value)}
-                placeholder="Search by neighbourhood or home"
+                onChange={(e) => setHomeSearch(e.target.value)}
+                placeholder="Search by name or location"
               />
             </div>
-            <select
-              className="role-filter"
-              value={homeRegionFilter}
-              onChange={(event) => setHomeRegionFilter(event.target.value)}
-              aria-label="Filter homes by region"
-            >
-              <option value="All regions">All regions</option>
-              {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-            <select
-              className="role-filter"
-              value={homeCategoryFilter}
-              onChange={(event) => setHomeCategoryFilter(event.target.value)}
-              aria-label="Filter homes by category"
-            >
-              <option value="All categories">All categories</option>
-              <option value="Studio">Studio</option>
-              <option value="One bedroom">One bedroom</option>
-              <option value="Two bedroom">Two bedroom</option>
-              <option value="Three bedroom">Three bedroom</option>
-              <option value="Four bedroom">Four bedroom</option>
-            </select>
+            <div className="select-field">
+              <span>⌖</span>
+              <select
+                value={homeRegionFilter}
+                onChange={(e) => setHomeRegionFilter(e.target.value)}
+              >
+                <option value="All regions">All regions</option>
+                {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="select-field">
+              <span>📊</span>
+              <select
+                value={homeStatusFilter}
+                onChange={(e) => setHomeStatusFilter(e.target.value)}
+              >
+                <option value="All">All status</option>
+                <option value="Available">Available</option>
+                <option value="Taken">Taken</option>
+              </select>
+            </div>
+            <div className="select-field">
+              <span>⌂</span>
+              <select
+                value={homeCategoryFilter}
+                onChange={(e) => setHomeCategoryFilter(e.target.value)}
+              >
+                <option value="All categories">All categories</option>
+                <option>Single room</option>
+                <option>Bedsitter</option>
+                <option>One bedroom</option>
+                <option>Two bedroom</option>
+                <option>Three bedroom</option>
+                <option>Four bedroom</option>
+              </select>
+            </div>
           </div>
           {homes.length === 0 ? (
             <div className="empty-state"><strong>No homes listed yet</strong><span>Add your first home to get started.</span></div>
@@ -835,7 +930,10 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       home.region.toLowerCase().includes(search)
                     const matchesRegion = homeRegionFilter === 'All regions' || home.region === homeRegionFilter
                     const matchesCategory = homeCategoryFilter === 'All categories' || home.type === homeCategoryFilter
-                    return matchesSearch && matchesRegion && matchesCategory
+                    const matchesStatus = homeStatusFilter === 'All' ||
+                      (homeStatusFilter === 'Available' && home.available) ||
+                      (homeStatusFilter === 'Taken' && !home.available)
+                    return matchesSearch && matchesRegion && matchesCategory && matchesStatus
                   }).map((home) => (
                     <tr key={home.id}>
                       <td>
