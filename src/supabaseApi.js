@@ -288,7 +288,7 @@ export const updateProfile = async (profile, token) => {
 
 // Homes functions — fetch all homes (SuperAdmin sees all, others see available only)
 export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds = []) => {
-  // First fetch homes with their images
+  // First fetch homes with their images and building data
   let query = supabase
     .from('homes')
     .select(`
@@ -298,6 +298,12 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
         phone,
         bio,
         company
+      ),
+      buildings!homes_building_id_fkey (
+        id,
+        name as building_name,
+        location as building_location,
+        region as building_region
       )
     `)
 
@@ -360,6 +366,33 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   } catch (error) {
     // If home_images table doesn't exist yet, we'll use the single image fallback
     console.log('home_images table not yet created, using single image fallback')
+  }
+
+  // Fetch building images for homes that are part of buildings
+  const buildingIds = [...new Set(homesData.filter(h => h.building_id).map(h => h.building_id))]
+  let buildingImagesByBuilding = {}
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildingImages } = await supabase
+        .from('building_images')
+        .select('*')
+        .in('building_id', buildingIds)
+        .order('order_index', { ascending: true })
+
+      if (buildingImages) {
+        buildingImages.forEach(img => {
+          if (!buildingImagesByBuilding[img.building_id]) {
+            buildingImagesByBuilding[img.building_id] = []
+          }
+          buildingImagesByBuilding[img.building_id].push({
+            ...img,
+            url: img.image_url || '',
+          })
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building images:', error)
+    }
   }
 
   // Fetch average ratings for all homes (gracefully fail if table doesn't exist yet)
@@ -444,12 +477,25 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   }
 
   return filteredHomes.map((home) => {
-    const imgs = imagesByHome[home.id] || [{ url: home.image, is_primary: true, order_index: 0 }]
+    const imgs = imagesByHome[home.id] || []
+    
+    // If home has no images but is part of a building, use building images
+    let finalImages = imgs
+    if (imgs.length === 0 && home.building_id && buildingImagesByBuilding[home.building_id]) {
+      finalImages = buildingImagesByBuilding[home.building_id]
+    }
+    
+    // If still no images, use single image fallback
+    if (finalImages.length === 0) {
+      finalImages = [{ url: home.image, is_primary: true, order_index: 0 }]
+    }
+    
     // If the home was added by file upload, homes.image may be empty.
     // Use the primary (or first) image from home_images as the card thumbnail.
-    const primaryImage = imgs.find(i => i.is_primary) || imgs[0]
+    const primaryImage = finalImages.find(i => i.is_primary) || finalImages[0]
     const cardImage = home.image || primaryImage?.url || ''
     const ratingInfo = ratingsByHome[home.id]
+    
     return {
       ...home,
       parking: Boolean(home.parking),
@@ -460,10 +506,13 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       agent_bio: home.profiles?.bio || '',
       agent_company: home.profiles?.company || '',
       image: cardImage,
-      images: imgs,
+      images: finalImages,
       faqs: faqsByHome[home.id] || [],
       rating: ratingInfo ? (ratingInfo.total / ratingInfo.count).toFixed(1) : null,
       rating_count: ratingInfo ? ratingInfo.count : 0,
+      building_name: home.buildings?.name || null,
+      building_location: home.buildings?.location || null,
+      building_region: home.buildings?.region || null,
     }
   })
 }
@@ -1692,4 +1741,211 @@ export const fetchMyRating = async (homeId, token) => {
     .eq('tenant_id', user.id)
     .maybeSingle()
   return data || null
+}
+
+// ─── Building Management ───────────────────────────────────────────────────────
+
+export const createBuilding = async (buildingData, buildingImages, categoryTemplates, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { name, location, region, type, totalUnits, description, amenities } = buildingData
+
+  // Create building
+  const { data: building, error: buildingError } = await supabase
+    .from('buildings')
+    .insert({
+      name,
+      location,
+      region,
+      type: type || 'apartment',
+      total_units: totalUnits || 0,
+      available_units: totalUnits || 0,
+      description,
+      amenities,
+      agent_id: user.id,
+    })
+    .select()
+    .single()
+
+  handleSupabaseError(buildingError)
+
+  // Upload building images
+  if (buildingImages && buildingImages.length > 0) {
+    for (let i = 0; i < buildingImages.length; i++) {
+      const image = buildingImages[i]
+      const imageUrl = image.file ? (await uploadHouseImage(image.file, token)).url : image.url
+
+      await supabase
+        .from('building_images')
+        .insert({
+          building_id: building.id,
+          image_url: imageUrl,
+          image_type: image.type || 'exterior',
+          is_primary: i === 0,
+          order_index: i,
+        })
+    }
+  }
+
+  // Upload category template images
+  if (categoryTemplates && Object.keys(categoryTemplates).length > 0) {
+    for (const [category, images] of Object.entries(categoryTemplates)) {
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i]
+        const imageUrl = image.file ? (await uploadHouseImage(image.file, token)).url : image.url
+
+        await supabase
+          .from('building_category_images')
+          .insert({
+            building_id: building.id,
+            category,
+            image_url: imageUrl,
+            image_type: image.type || 'kitchen',
+            is_primary: i === 0,
+            order_index: i,
+          })
+      }
+    }
+  }
+
+  return building
+}
+
+export const fetchBuildings = async (token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { data, error } = await supabase
+    .from('buildings')
+    .select(`
+      *,
+      profiles!buildings_agent_id_fkey (name, phone, company)
+    `)
+    .eq('agent_id', user.id)
+    .order('created_at', { ascending: false })
+
+  handleSupabaseError(error)
+  return data || []
+}
+
+export const addUnitToBuilding = async (buildingId, unitData, unitImages, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  const { unitNumber, floor, category, price, deposit, description, sizeSqft } = unitData
+
+  // Create home as a unit in the building
+  const { data: home, error: homeError } = await supabase
+    .from('homes')
+    .insert({
+      name: unitNumber, // Use unit number as name for now
+      location: '', // Will get from building
+      region: '', // Will get from building
+      type: category,
+      parking: true,
+      price,
+      deposit,
+      image: '', // Will get from building or unit images
+      tag: 'Available',
+      details: description || '',
+      owner_id: user.id,
+      building_id: buildingId,
+      unit_number: unitNumber,
+      floor,
+      category,
+      available: true,
+    })
+    .select()
+    .single()
+
+  handleSupabaseError(homeError)
+
+  // Upload unit-specific images if provided
+  if (unitImages && unitImages.length > 0) {
+    for (let i = 0; i < unitImages.length; i++) {
+      const image = unitImages[i]
+      const imageUrl = image.file ? (await uploadHouseImage(image.file, token)).url : image.url
+
+      await supabase
+        .from('home_images')
+        .insert({
+          home_id: home.id,
+          image_url: imageUrl,
+          is_primary: i === 0,
+          order_index: i,
+        })
+    }
+  }
+
+  // Update building's available_units count
+  await supabase
+    .from('buildings')
+    .update({ available_units: available_units + 1 })
+    .eq('id', buildingId)
+
+  return home
+}
+
+export const fetchBuildingDetails = async (buildingId, token) => {
+  const { data, error } = await supabase
+    .from('buildings')
+    .select('*')
+    .eq('id', buildingId)
+    .single()
+
+  handleSupabaseError(error)
+  return data
+}
+
+export const fetchBuildingImages = async (buildingId) => {
+  const { data, error } = await supabase
+    .from('building_images')
+    .select('*')
+    .eq('building_id', buildingId)
+    .order('order_index', { ascending: true })
+
+  if (error && error.message.includes('does not exist')) return []
+  handleSupabaseError(error)
+  return data || []
+}
+
+export const fetchBuildingCategoryImages = async (buildingId) => {
+  const { data, error } = await supabase
+    .from('building_category_images')
+    .select('*')
+    .eq('building_id', buildingId)
+    .order('category, order_index', { ascending: true })
+
+  if (error && error.message.includes('does not exist')) return {}
+  handleSupabaseError(error)
+
+  // Group by category
+  const grouped = {}
+  ;(data || []).forEach(img => {
+    if (!grouped[img.category]) grouped[img.category] = []
+    grouped[img.category].push(img)
+  })
+  return grouped
+}
+
+export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
+  let query = supabase
+    .from('homes')
+    .select('*')
+    .eq('building_id', buildingId)
+    .eq('available', true)
+
+  if (filters.category && filters.category !== 'All') {
+    query = query.eq('category', filters.category)
+  }
+
+  if (filters.floor && filters.floor !== 'All') {
+    query = query.eq('floor', filters.floor)
+  }
+
+  const { data, error } = await query.order('unit_number', { ascending: true })
+
+  handleSupabaseError(error)
+  return data || []
 }

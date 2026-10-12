@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 import { KENYA_REGIONS } from './App'
 
