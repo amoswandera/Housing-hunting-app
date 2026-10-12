@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
-import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
+import { fetchAgentApplications, fetchManagedHomes, fetchMessages, fetchProfile, fetchTenantProfile, reviewApplication, sendMessage, updateHomeAvailability, updateHome, updatePassword, updateProfile, createHome, uploadHouseImage, uploadPdf, addHomeImages, deleteHomeImage, setPrimaryImage, fetchHomeFaqs, createFaq, updateFaq, deleteFaq, sendContractEmail, sendStatusNotificationEmail, returnHomeToAvailable, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
 import { downloadContractPDF, getContractPDFBlob } from './generateContract'
 import { KENYA_REGIONS } from './App'
 
@@ -76,6 +76,26 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [agentMsgSending, setAgentMsgSending] = useState(false)
   const msgEndRef = useRef(null)
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
+  const [navigationHistory, setNavigationHistory] = useState(['dashboard']) // Track navigation history for back button
+  const [editingHome, setEditingHome] = useState(null) // Home being edited
+  const [editingBuilding, setEditingBuilding] = useState(null) // Building being edited
+  const [editingUnit, setEditingUnit] = useState(null) // Unit being edited
+
+  // Navigation with history tracking
+  const navigateTo = (view) => {
+    setNavigationHistory(prev => [...prev, view])
+    setInternalView(view)
+  }
+
+  const navigateBack = () => {
+    if (navigationHistory.length > 1) {
+      const newHistory = [...navigationHistory]
+      newHistory.pop() // Remove current view
+      const previousView = newHistory[newHistory.length - 1]
+      setNavigationHistory(newHistory)
+      setInternalView(previousView)
+    }
+  }
   const [contractForm, setContractForm] = useState({
     tenantName: '',
     tenantId: '',
@@ -172,7 +192,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
 
       let imageUrl = form.image
       if (imageFile) imageUrl = (await uploadHouseImage(imageFile, sessionToken)).url
-      if (!imageUrl && imageFiles.length === 0) throw new Error('Add an image URL or choose at least one house image file.')
+      if (!imageUrl && imageFiles.length === 0 && !editingHome) throw new Error('Add an image URL or choose at least one house image file.')
 
       // Use custom region if "Other" is selected
       const region = form.region === 'Other' ? form.customRegion : form.region
@@ -189,13 +209,22 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         })
       }
 
-      await createHome({ ...form, region, image: imageUrl || '' }, images, sessionToken)
+      if (editingHome) {
+        // Update existing home
+        await updateHome(editingHome.id, { ...form, region, image: imageUrl || '' }, imageFile, images, sessionToken)
+        onNotify(`"${form.name}" has been updated.`)
+        setEditingHome(null)
+      } else {
+        // Create new home
+        await createHome({ ...form, region, image: imageUrl || '' }, images, sessionToken)
+        onNotify('New vacant home published.')
+      }
+      
       setForm({ name: '', location: '', region: 'Nairobi County', type: 'One bedroom', parking: true, price: '', deposit: '', image: '', tag: 'New listing', details: '', customRegion: '' })
       setImageFile(null)
       setImageFiles([])
       setShowForm(false)
       await loadData()
-      onNotify('New vacant home published.')
     } catch (error) { onNotify(error.message) }
   }
 
@@ -353,6 +382,8 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
     setSelectedTenant(null)
     setAgentMessages([])
     setAgentMsgText('')
+    // Navigate back to applications view
+    setInternalView('applications')
   }
 
   const sendContractByEmail = (application) => {
@@ -587,7 +618,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
           {/* Homes Card */}
           <div
-            onClick={() => { setInternalView('homes'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
+            onClick={() => { navigateTo('homes'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
             style={{
               background: 'white',
               borderRadius: '12px',
@@ -609,7 +640,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
 
           {/* Applications Card */}
           <div
-            onClick={() => { setInternalView('applications'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
+            onClick={() => { navigateTo('applications'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
             style={{
               background: 'white',
               borderRadius: '12px',
@@ -631,7 +662,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
 
           {/* Buildings Card */}
           <div
-            onClick={() => { setInternalView('buildings'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
+            onClick={() => { navigateTo('buildings'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
             style={{
               background: 'white',
               borderRadius: '12px',
@@ -657,7 +688,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         <form className="listing-form profile-form" onSubmit={saveProfile}>
           <div className="form-header-bar">
             <h2>Agent profile</h2>
-            {!profileNudge && <button type="button" className="in-app-back-button" onClick={() => setShowProfile(false)}>← Back to dashboard</button>}
+            {!profileNudge && <button type="button" className="in-app-back-button" onClick={navigateBack}>← Back</button>}
           </div>
           {profileNudge && (
             <p className="profile-nudge" style={{ background: '#fdf6ed', color: '#9c5b1c', padding: '12px 14px', borderRadius: '6px', borderLeft: '4px solid #e08b2d', marginBottom: '14px', fontSize: '11px', lineHeight: '1.5' }}>
@@ -780,8 +811,8 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
       {showForm && (
         <form className="listing-form" onSubmit={submitHome}>
           <div className="form-header-bar">
-            <h2>Add a new home</h2>
-            <button type="button" className="in-app-back-button" onClick={() => setShowForm(false)}>← Back to dashboard</button>
+            <h2>{editingHome ? 'Edit home' : 'Add a new home'}</h2>
+            <button type="button" className="in-app-back-button" onClick={navigateBack}>← Back</button>
           </div>
           <p className="form-help">Add details for a new vacant home to your listings.</p>
           <div className="form-grid">
@@ -932,6 +963,12 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                             style={{ padding: '6px 12px', fontSize: '12px', background: '#173d36', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
                           >
                             View / FAQ
+                          </button>
+                          <button 
+                            onClick={() => { setEditingHome(home); setForm({ name: home.name, location: home.location, region: home.region, type: home.type, parking: home.parking, price: home.price, deposit: home.deposit, image: home.image, tag: home.tag || '', details: home.details || '', customRegion: '' }); setShowForm(true); navigateTo('homes') }}
+                            style={{ padding: '6px 12px', fontSize: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                          >
+                            Edit
                           </button>
                           <button 
                             onClick={() => toggleAvailability(home)}

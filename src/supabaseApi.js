@@ -862,6 +862,63 @@ export const updateHomeAvailability = async (id, available, token) => {
   }
 }
 
+export const updateHome = async (id, homeData, imageFile, imageFiles, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  let imageUrl = homeData.image
+  if (imageFile) imageUrl = (await uploadHouseImage(imageFile, token)).url
+
+  // Use custom region if "Other" is selected
+  const region = homeData.region === 'Other' ? homeData.customRegion : homeData.region
+  if (!region) throw new Error('Please enter a region name.')
+
+  const { data, error } = await supabase
+    .from('homes')
+    .update({
+      name: homeData.name,
+      location: homeData.location,
+      region,
+      type: homeData.type,
+      price: homeData.price,
+      deposit: homeData.deposit,
+      image: imageUrl || homeData.image,
+      tag: homeData.tag,
+      details: homeData.details,
+      parking: homeData.parking,
+    })
+    .eq('id', id)
+    .eq('owner_id', user.id)
+    .select()
+    .single()
+
+  handleSupabaseError(error)
+
+  // Handle multiple images
+  if (imageFiles && imageFiles.length > 0) {
+    for (let i = 0; i < imageFiles.length; i++) {
+      const image = imageFiles[i]
+      const imageUrl = image.file ? (await uploadHouseImage(image.file, token)).url : image.url
+
+      await supabase
+        .from('home_images')
+        .insert({
+          home_id: data.id,
+          image_url: imageUrl,
+          is_primary: i === 0,
+          order_index: i,
+        })
+    }
+  }
+
+  return {
+    ...data,
+    parking: Boolean(data.parking),
+    available: Boolean(data.available),
+    agent_id: data.owner_id,
+  }
+}
+
 // Applications functions
 export const submitApplication = async (homeId, message, token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
