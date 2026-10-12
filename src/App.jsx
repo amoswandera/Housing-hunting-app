@@ -850,7 +850,7 @@ function App() {
               {authUser?.role === 'Agent' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
               <button className={`nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}><span>⌂</span> Homes</button>
               <button className={`nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}><span>📋</span> Applications</button>
-              {authUser?.role === 'Agent' && <button className={`nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { setActiveView('agent-buildings'); setMobileMenuOpen(false) }}><span>🏢</span> Buildings</button>}
+              <button className={`nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { setActiveView('agent-buildings'); setMobileMenuOpen(false) }}><span>🏢</span> Buildings</button>
             </>
           )}
           {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' || showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
@@ -1961,6 +1961,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [overview, setOverview] = useState(null)
   const [users, setUsers] = useState([])
   const [homes, setHomes] = useState([])
+  const [buildings, setBuildings] = useState([])
   const [applications, setApplications] = useState([])
   const [userSearch, setUserSearch] = useState('')
   const [userRoleFilter, setUserRoleFilter] = useState('All')
@@ -1974,7 +1975,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState(null)
   const [showUserDetails, setShowUserDetails] = useState(false)
-  const [selectedView, setSelectedView] = useState(null) // 'users', 'homes', 'applications', 'payments'
+  const [selectedView, setSelectedView] = useState(null) // 'users', 'homes', 'applications', 'payments', 'buildings'
   const [showProfile, setShowProfile] = useState(false)
   const [profile, setProfile] = useState({ name: '', phone: '', occupation: '', bio: '', company: '' })
   const emptyNewUser = { name: '', identifier: '', password: '', role: 'Agent' }
@@ -1990,11 +1991,15 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       const [stats, people] = await Promise.all([fetchSuperAdminOverview(token), fetchSuperAdminUsers(token)])
       setOverview(stats)
       setUsers(people)
-      
+
       // Also fetch ALL homes (available + taken) for the admin view
       const allHomes = await fetchAllHomesAdmin(token)
       setHomes(allHomes)
-      
+
+      // Fetch all buildings
+      const allBuildings = await fetchBuildings(token)
+      setBuildings(allBuildings)
+
       // Fetch all applications (admin can see all)
       const allApps = await fetchSuperAdminApplications(token)
       setApplications(allApps)
@@ -2021,6 +2026,10 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       setSelectedView('applications')
       setShowProfile(false)
       setNavigationHistory(prev => [...prev, 'agent-applications'])
+    } else if (activeView === 'agent-buildings') {
+      setSelectedView('buildings')
+      setShowProfile(false)
+      setNavigationHistory(prev => [...prev, 'agent-buildings'])
     } else if (activeView === 'agent-profile') {
       setShowProfile(true)
       setSelectedView(null)
@@ -2051,6 +2060,9 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
       } else if (previousView === 'agent-applications') {
         setSelectedView('applications')
         setActiveView('agent-applications')
+      } else if (previousView === 'agent-buildings') {
+        setSelectedView('buildings')
+        setActiveView('agent-buildings')
       } else if (previousView === 'agent-profile') {
         setShowProfile(true)
         setSelectedView(null)
@@ -2134,6 +2146,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
     { label: 'Tenants', value: overview?.tenants, view: 'users', roleFilter: 'Tenant' },
     { label: 'Agents', value: overview?.agents, view: 'users', roleFilter: 'Agent' },
     { label: 'Homes', value: overview?.homes, view: 'homes' },
+    { label: 'Buildings', value: buildings.length, view: 'buildings' },
     { label: 'Applications', value: overview?.applications, view: 'applications' },
     { label: 'Deposit payments', value: overview?.payments, view: 'payments' },
   ]
@@ -2608,6 +2621,52 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
                       )}
                     </>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedView === 'buildings' && (
+            <div className="table-panel">
+              <div className="table-title">
+                <h2>All Buildings</h2>
+                <span>{buildings.length} building{buildings.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="users-table-wrap">
+                <table className="users-table homes-table">
+                  <thead>
+                    <tr>
+                      <th>Building</th>
+                      <th>Location</th>
+                      <th>Region</th>
+                      <th>Type</th>
+                      <th>Total Units</th>
+                      <th>Agent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {buildings.map((building) => (
+                      <tr key={building.id}>
+                        <td>
+                          <div className="users-table-name">
+                            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '14px', backgroundImage: building.images && building.images.length > 0 ? `url(${building.images[0].url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                            <strong>{building.name}</strong>
+                          </div>
+                        </td>
+                        <td>{building.location}</td>
+                        <td>{building.region}</td>
+                        <td>{building.type}</td>
+                        <td>{building.total_units}</td>
+                        <td>{building.agent_name || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!loading && buildings.length === 0 && (
+                <div className="empty-state">
+                  <strong>No buildings found</strong>
+                  <span>Buildings will appear here once agents add them.</span>
                 </div>
               )}
             </div>
