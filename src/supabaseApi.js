@@ -1096,6 +1096,8 @@ export const fetchAgentApplications = async (token) => {
       category: home.category,
       floor: home.floor,
       building_name: building?.name || null,
+      // Keep original name for backward compatibility in UI
+      home_name: buildingId && building ? `${building.name} - ${home.unit_number}` : home.name,
     }
   })
 }
