@@ -298,6 +298,7 @@ function App() {
   const [savedCategory, setSavedCategory] = useState('All categories')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('All')
   const [showNotifications, setShowNotifications] = useState(false)
+  const [readNotifications, setReadNotifications] = useState(new Set())
   // Messaging state
   const [openMessageAppId, setOpenMessageAppId] = useState(null)
   const [messageThreads, setMessageThreads] = useState({}) // { [appId]: Message[] }
@@ -690,9 +691,9 @@ function App() {
             <div style={{ position: 'relative' }}>
               <button className="icon-button" aria-label="Notifications" onClick={(e) => { e.stopPropagation(); setShowNotifications(n => !n) }} style={{ position: 'relative' }}>
                 🔔
-                {notifications.length > 0 && (
+                {notifications.filter(n => !readNotifications.has(n.id)).length > 0 && (
                   <span style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#df775d', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '10px', lineHeight: 1.4 }}>
-                    {notifications.length}
+                    {notifications.filter(n => !readNotifications.has(n.id)).length}
                   </span>
                 )}
               </button>
@@ -701,17 +702,25 @@ function App() {
                   onClick={e => e.stopPropagation()}>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid #e7ede8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ fontSize: '12px', color: '#173d36' }}>Notifications</strong>
-                    <button onClick={() => setShowNotifications(false)} style={{ border: 'none', background: 'none', color: '#9aa49e', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {notifications.length > 0 && (
+                        <button onClick={() => { setReadNotifications(new Set(notifications.map(n => n.id))) }} style={{ border: 'none', background: 'none', color: '#df775d', cursor: 'pointer', fontSize: '10px', fontWeight: 700 }}>Mark all read</button>
+                      )}
+                      <button onClick={() => setShowNotifications(false)} style={{ border: 'none', background: 'none', color: '#9aa49e', cursor: 'pointer', fontSize: '16px' }}>×</button>
+                    </div>
                   </div>
                   {notifications.length === 0 ? (
                     <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: '12px', color: '#9aa49e' }}>No new notifications</div>
                   ) : (
                     <ul style={{ margin: 0, padding: 0, listStyle: 'none', maxHeight: '320px', overflowY: 'auto' }}>
-                      {notifications.map(n => (
-                        <li key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f0', fontSize: '12px', lineHeight: 1.5, color: n.type === 'warning' ? '#92400e' : n.type === 'success' ? '#1a5c3a' : '#4b5563', background: n.type === 'warning' ? '#fff8ed' : n.type === 'success' ? '#f0faf4' : '#fff' }}>
-                          {n.text}
+                      {notifications.map(n => {
+                        const isRead = readNotifications.has(n.id)
+                        return (
+                        <li key={n.id} onClick={() => { setReadNotifications(prev => new Set([...prev, n.id])) }} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f4f0', fontSize: '12px', lineHeight: 1.5', color: isRead ? '#9aa49e' : n.type === 'warning' ? '#92400e' : n.type === 'success' ? '#1a5c3a' : '#4b5563', background: isRead ? '#fafafa' : n.type === 'warning' ? '#fff8ed' : n.type === 'success' ? '#f0faf4' : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ flex: 1 }}>{n.text}</span>
+                          {!isRead && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#df775d', flexShrink: 0 }}></span>}
                         </li>
-                      ))}
+                      )})}
                     </ul>
                   )}
                 </div>
