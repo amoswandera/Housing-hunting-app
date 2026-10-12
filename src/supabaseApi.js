@@ -1888,16 +1888,16 @@ export const addUnitToBuilding = async (buildingId, unitData, unitImages, token)
   }
 
   // Update building's available_units count
-  const { data: building } = await supabase
+  const { data: buildingForCount } = await supabase
     .from('buildings')
     .select('available_units')
     .eq('id', buildingId)
     .single()
 
-  if (building) {
+  if (buildingForCount) {
     await supabase
       .from('buildings')
-      .update({ available_units: building.available_units + 1 })
+      .update({ available_units: buildingForCount.available_units + 1 })
       .eq('id', buildingId)
   }
 
