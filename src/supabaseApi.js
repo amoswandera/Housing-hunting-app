@@ -1835,13 +1835,22 @@ export const addUnitToBuilding = async (buildingId, unitData, unitImages, token)
 
   const { unitNumber, floor, category, price, deposit, description, sizeSqft } = unitData
 
+  // Fetch building details to get location and region
+  const { data: building } = await supabase
+    .from('buildings')
+    .select('location, region')
+    .eq('id', buildingId)
+    .single()
+
+  if (!building) throw new Error('Building not found')
+
   // Create home as a unit in the building
   const { data: home, error: homeError } = await supabase
     .from('homes')
     .insert({
       name: unitNumber, // Use unit number as name for now
-      location: '', // Will get from building
-      region: '', // Will get from building
+      location: building.location,
+      region: building.region,
       type: category,
       parking: true,
       price,
@@ -1879,10 +1888,18 @@ export const addUnitToBuilding = async (buildingId, unitData, unitImages, token)
   }
 
   // Update building's available_units count
-  await supabase
+  const { data: building } = await supabase
     .from('buildings')
-    .update({ available_units: available_units + 1 })
+    .select('available_units')
     .eq('id', buildingId)
+    .single()
+
+  if (building) {
+    await supabase
+      .from('buildings')
+      .update({ available_units: building.available_units + 1 })
+      .eq('id', buildingId)
+  }
 
   return home
 }

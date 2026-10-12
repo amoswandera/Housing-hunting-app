@@ -31,6 +31,7 @@ const getWhatsAppUrl = (phone, propertyName = '') => {
 function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [homes, setHomes] = useState([])
   const [applications, setApplications] = useState([])
+  const [buildings, setBuildings] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showTenantProfile, setShowTenantProfile] = useState(false)
@@ -52,7 +53,15 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
   const [selectedHome, setSelectedHome] = useState(null)
-  const [internalView, setInternalView] = useState(view) // 'homes' or 'applications'
+  const [internalView, setInternalView] = useState(view) // 'homes', 'applications', or 'buildings'
+  const [showBuildingForm, setShowBuildingForm] = useState(false)
+  const [showAddUnitForm, setShowAddUnitForm] = useState(false)
+  const [selectedBuilding, setSelectedBuilding] = useState(null)
+  const [buildingForm, setBuildingForm] = useState({ name: '', location: '', region: 'Nairobi County', type: 'apartment', totalUnits: '', description: '', amenities: '', customRegion: '' })
+  const [buildingImages, setBuildingImages] = useState([])
+  const [categoryTemplates, setCategoryTemplates] = useState({})
+  const [unitForm, setUnitForm] = useState({ unitNumber: '', floor: '', category: '1BR', price: '', deposit: '', description: '', sizeSqft: '' })
+  const [unitImages, setUnitImages] = useState([])
   const [showContractForm, setShowContractForm] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState(null) // full-page application detail
   const [homeFaqs, setHomeFaqs] = useState({}) // { [homeId]: [{id, question, answer}] }
@@ -95,8 +104,9 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
 
   const loadData = useCallback(async () => {
     try {
-      const [managedHomes, receivedApplications] = await Promise.all([fetchManagedHomes(token), fetchAgentApplications(token)])
+      const [managedHomes, receivedApplications, agentBuildings] = await Promise.all([fetchManagedHomes(token), fetchAgentApplications(token), fetchBuildings(token)])
       setHomes(managedHomes)
+      setBuildings(agentBuildings)
       setApplications(receivedApplications)
       // Check for applications approved but not paid within 72 hours
       const now = new Date()
@@ -564,14 +574,23 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         >
           🏠 Homes
         </button>
-        <button 
+        <button
           onClick={() => { setInternalView('applications'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null) }}
-          style={{ 
+          style={{
             padding: '10px 20px', borderRadius: '8px', border: internalView === 'applications' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
             ':hover': { background: '#f9fafb' }
           }}
         >
           📋 Applications
+        </button>
+        <button
+          onClick={() => { setInternalView('buildings'); setShowForm(false); setShowProfile(false); setShowTenantProfile(false); setSelectedHome(null); setShowBuildingForm(false); setShowAddUnitForm(false) }}
+          style={{
+            padding: '10px 20px', borderRadius: '8px', border: internalView === 'buildings' ? '2px solid #3b82f6' : '1px solid #e5e7eb', background: 'white', cursor: 'pointer',
+            ':hover': { background: '#f9fafb' }
+          }}
+        >
+          🏢 Buildings
         </button>
       </div>
 
@@ -1435,6 +1454,347 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Buildings View */}
+      {internalView === 'buildings' && !showBuildingForm && !showAddUnitForm && (
+        <div className="table-panel">
+          <div className="table-title">
+            <h2>Your Buildings</h2>
+            <span>{buildings.length} building{buildings.length === 1 ? '' : 's'}</span>
+            <button onClick={loadData}>Refresh ↻</button>
+            <button onClick={() => setShowBuildingForm(true)} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+              + Add Building
+            </button>
+          </div>
+          {buildings.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
+              <p style={{ fontSize: '16px', marginBottom: '8px' }}>No buildings yet</p>
+              <p style={{ fontSize: '14px' }}>Add a building to manage multiple units efficiently</p>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {buildings.map((building) => (
+                  <tr key={building.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>{building.name}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
+                    <td style={{ padding: '12px' }}>
+                      <button
+                        onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
+                        style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                      >
+                        + Add Unit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Create Building Form */}
+      {showBuildingForm && (
+        <div className="table-panel">
+          <div className="table-title">
+            <h2>Add New Building</h2>
+            <button onClick={() => setShowBuildingForm(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+          </div>
+          <form onSubmit={async (e) => {
+            e.preventDefault()
+            try {
+              const sessionToken = (await supabase.auth.getSession()).data.session?.access_token
+              if (!sessionToken) throw new Error('Authentication required')
+
+              const region = buildingForm.region === 'Other' ? buildingForm.customRegion : buildingForm.region
+              if (!region) throw new Error('Please enter a region name.')
+
+              const amenities = buildingForm.amenities ? buildingForm.amenities.split(',').map(a => a.trim()) : []
+
+              const buildingImagesWithFiles = buildingImages.map((img, index) => ({
+                file: img.file,
+                type: img.type || 'exterior',
+                is_primary: index === 0
+              }))
+
+              await createBuilding(
+                {
+                  name: buildingForm.name,
+                  location: buildingForm.location,
+                  region,
+                  type: buildingForm.type,
+                  totalUnits: parseInt(buildingForm.totalUnits),
+                  description: buildingForm.description,
+                  amenities
+                },
+                buildingImagesWithFiles,
+                categoryTemplates,
+                sessionToken
+              )
+
+              setBuildingForm({ name: '', location: '', region: 'Nairobi County', type: 'apartment', totalUnits: '', description: '', amenities: '', customRegion: '' })
+              setBuildingImages([])
+              setCategoryTemplates({})
+              setShowBuildingForm(false)
+              await loadData()
+              onNotify('Building created successfully.')
+            } catch (error) { onNotify(error.message) }
+          }} style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
+            <label style={{ display: 'block' }}>
+              <strong>Building Name</strong>
+              <input
+                type="text"
+                value={buildingForm.name}
+                onChange={(e) => setBuildingForm({ ...buildingForm, name: e.target.value })}
+                required
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Location</strong>
+              <input
+                type="text"
+                value={buildingForm.location}
+                onChange={(e) => setBuildingForm({ ...buildingForm, location: e.target.value })}
+                required
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Region</strong>
+              <select
+                value={buildingForm.region}
+                onChange={(e) => setBuildingForm({ ...buildingForm, region: e.target.value })}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              >
+                {KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              {buildingForm.region === 'Other' && (
+                <input
+                  type="text"
+                  value={buildingForm.customRegion}
+                  onChange={(e) => setBuildingForm({ ...buildingForm, customRegion: e.target.value })}
+                  placeholder="Enter custom region"
+                  style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                />
+              )}
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Type</strong>
+              <select
+                value={buildingForm.type}
+                onChange={(e) => setBuildingForm({ ...buildingForm, type: e.target.value })}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              >
+                <option value="apartment">Apartment</option>
+                <option value="standalone">Standalone</option>
+              </select>
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Total Units</strong>
+              <input
+                type="number"
+                value={buildingForm.totalUnits}
+                onChange={(e) => setBuildingForm({ ...buildingForm, totalUnits: e.target.value })}
+                required
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Description</strong>
+              <textarea
+                value={buildingForm.description}
+                onChange={(e) => setBuildingForm({ ...buildingForm, description: e.target.value })}
+                rows={3}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Amenities (comma-separated)</strong>
+              <input
+                type="text"
+                value={buildingForm.amenities}
+                onChange={(e) => setBuildingForm({ ...buildingForm, amenities: e.target.value })}
+                placeholder="e.g., gym, pool, parking, security"
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Building Images</strong>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files)
+                  setBuildingImages(files.map(file => ({ file, type: 'exterior' })))
+                }}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button type="submit" style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+                Create Building
+              </button>
+              <button type="button" onClick={() => setShowBuildingForm(false)} style={{ padding: '12px 24px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Add Unit to Building Form */}
+      {showAddUnitForm && selectedBuilding && (
+        <div className="table-panel">
+          <div className="table-title">
+            <h2>Add Unit to {selectedBuilding.name}</h2>
+            <button onClick={() => setShowAddUnitForm(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+          </div>
+          <form onSubmit={async (e) => {
+            e.preventDefault()
+            try {
+              const sessionToken = (await supabase.auth.getSession()).data.session?.access_token
+              if (!sessionToken) throw new Error('Authentication required')
+
+              const unitImagesWithFiles = unitImages.map((img, index) => ({
+                file: img.file,
+                is_primary: index === 0
+              }))
+
+              await addUnitToBuilding(
+                selectedBuilding.id,
+                {
+                  unitNumber: unitForm.unitNumber,
+                  floor: unitForm.floor,
+                  category: unitForm.category,
+                  price: parseFloat(unitForm.price),
+                  deposit: parseFloat(unitForm.deposit),
+                  description: unitForm.description,
+                  sizeSqft: unitForm.sizeSqft
+                },
+                unitImagesWithFiles,
+                sessionToken
+              )
+
+              setUnitForm({ unitNumber: '', floor: '', category: '1BR', price: '', deposit: '', description: '', sizeSqft: '' })
+              setUnitImages([])
+              setShowAddUnitForm(false)
+              setSelectedBuilding(null)
+              await loadData()
+              onNotify('Unit added successfully.')
+            } catch (error) { onNotify(error.message) }
+          }} style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
+            <label style={{ display: 'block' }}>
+              <strong>Unit Number</strong>
+              <input
+                type="text"
+                value={unitForm.unitNumber}
+                onChange={(e) => setUnitForm({ ...unitForm, unitNumber: e.target.value })}
+                required
+                placeholder="e.g., A-101"
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Floor</strong>
+              <input
+                type="text"
+                value={unitForm.floor}
+                onChange={(e) => setUnitForm({ ...unitForm, floor: e.target.value })}
+                placeholder="e.g., 1st, 2nd"
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Category</strong>
+              <select
+                value={unitForm.category}
+                onChange={(e) => setUnitForm({ ...unitForm, category: e.target.value })}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              >
+                <option value="bedsitter">Bedsitter</option>
+                <option value="1BR">1 Bedroom</option>
+                <option value="2BR">2 Bedroom</option>
+                <option value="3BR">3 Bedroom</option>
+                <option value="4BR">4 Bedroom</option>
+              </select>
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Price (KES)</strong>
+              <input
+                type="number"
+                value={unitForm.price}
+                onChange={(e) => setUnitForm({ ...unitForm, price: e.target.value })}
+                required
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Deposit (KES)</strong>
+              <input
+                type="number"
+                value={unitForm.deposit}
+                onChange={(e) => setUnitForm({ ...unitForm, deposit: e.target.value })}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Size (sqft)</strong>
+              <input
+                type="text"
+                value={unitForm.sizeSqft}
+                onChange={(e) => setUnitForm({ ...unitForm, sizeSqft: e.target.value })}
+                placeholder="e.g., 45"
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Description</strong>
+              <textarea
+                value={unitForm.description}
+                onChange={(e) => setUnitForm({ ...unitForm, description: e.target.value })}
+                rows={3}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Unit Images (optional - leave empty to use building template)</strong>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files)
+                  setUnitImages(files.map(file => ({ file })))
+                }}
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button type="submit" style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#10b981', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+                Add Unit
+              </button>
+              <button type="button" onClick={() => setShowAddUnitForm(false)} style={{ padding: '12px 24px', borderRadius: '8px', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </section>
