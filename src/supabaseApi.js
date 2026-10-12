@@ -353,7 +353,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
         }
         imagesByHome[img.home_id].push({
           ...img,
-          url: img.image_url || img.url || '',
+          url: img.image_url || img.url || img.image || '',
         })
       })
     }
@@ -395,7 +395,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
           }
           buildingImagesByBuilding[img.building_id].push({
             ...img,
-            url: img.image_url || '',
+            url: img.image_url || img.url || img.image || '',
           })
         })
       }
@@ -504,9 +504,15 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       finalImages = [{ url: home.image, is_primary: true, order_index: 0 }]
     }
     
+    // Normalize images to always have url field
+    const normalizedImages = finalImages.map(img => ({
+      ...img,
+      url: img.url || img.image_url || img.image || ''
+    }))
+    
     // If the home was added by file upload, homes.image may be empty.
     // Use the primary (or first) image from home_images as the card thumbnail.
-    const primaryImage = finalImages.find(i => i.is_primary) || finalImages[0]
+    const primaryImage = normalizedImages.find(i => i.is_primary) || normalizedImages[0]
     const cardImage = home.image || primaryImage?.url || ''
     const ratingInfo = ratingsByHome[home.id]
     
@@ -520,7 +526,7 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
       agent_bio: home.profiles?.bio || '',
       agent_company: home.profiles?.company || '',
       image: cardImage,
-      images: finalImages,
+      images: normalizedImages,
       faqs: faqsByHome[home.id] || [],
       rating: ratingInfo ? (ratingInfo.total / ratingInfo.count).toFixed(1) : null,
       rating_count: ratingInfo ? ratingInfo.count : 0,
@@ -703,7 +709,7 @@ export const fetchManagedHomes = async (token) => {
         }
         imagesByHome[img.home_id].push({
           ...img,
-          url: img.image_url || img.url || '',
+          url: img.image_url || img.url || img.image || '',
         })
       })
     }
@@ -731,7 +737,7 @@ export const fetchManagedHomes = async (token) => {
           }
           buildingImagesByBuilding[img.building_id].push({
             ...img,
-            url: img.image_url || '',
+            url: img.image_url || img.url || img.image || '',
           })
         })
       }
@@ -763,7 +769,13 @@ export const fetchManagedHomes = async (token) => {
       finalImages = [{ url: home.image, is_primary: true, order_index: 0 }]
     }
     
-    const primaryImage = finalImages.find(i => i.is_primary) || finalImages[0]
+    // Normalize images to always have url field
+    const normalizedImages = finalImages.map(img => ({
+      ...img,
+      url: img.url || img.image_url || img.image || ''
+    }))
+    
+    const primaryImage = normalizedImages.find(i => i.is_primary) || normalizedImages[0]
     const cardImage = home.image || primaryImage?.url || ''
     
     return {
@@ -772,7 +784,7 @@ export const fetchManagedHomes = async (token) => {
       available: Boolean(home.available),
       agent_id: home.owner_id,
       image: cardImage,
-      images: finalImages,
+      images: normalizedImages,
       building_images: buildingImgs,
     }
   })
@@ -1907,7 +1919,7 @@ export const fetchBuildings = async (token) => {
           }
           buildingImagesByBuilding[img.building_id].push({
             ...img,
-            url: img.image_url || '',
+            url: img.image_url || img.url || img.image || '',
           })
         })
       }
@@ -2068,8 +2080,14 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
   }
 
   // Merge building images into unit data
+  // Normalize building images to have url field
+  const normalizedBuildingImages = buildingImages.map(img => ({
+    ...img,
+    url: img.image_url || img.url || img.image || ''
+  }))
+  
   return (data || []).map(unit => ({
     ...unit,
-    building_images: buildingImages
+    building_images: normalizedBuildingImages
   }))
 }

@@ -749,8 +749,9 @@ function App() {
 
   const renderBuildingCard = (building) => {
     // Use building images if available, otherwise fall back to first unit image
+    const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
     const primaryImage = building.images && building.images.length > 0
-      ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
+      ? extractUrl(building.images.find(i => i.is_primary) || building.images[0])
       : (building.units.length > 0 ? building.units[0].image : '')
     const priceRange = building.minPrice === building.maxPrice
       ? formatKes(building.minPrice)
@@ -769,7 +770,7 @@ function App() {
             src={primaryImage || ''} 
             alt={`${building.name} exterior`}
             onError={(e) => {
-              console.error('Building image failed to load:', primaryImage)
+              console.error('Building image failed to load:', primaryImage, 'Building:', building)
               e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
             }}
           />
@@ -1253,8 +1254,9 @@ function App() {
             <div className="image-gallery-container">
               {(() => {
                 const hasImages = selectedHome.images && selectedHome.images.length > 0
+                const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
                 const imageUrl = hasImages
-                  ? (selectedHome.images[currentImageIndex]?.url || selectedHome.images[0]?.url)
+                  ? extractUrl(selectedHome.images[currentImageIndex] || selectedHome.images[0])
                   : selectedHome.image
                 
                 return (
@@ -1264,7 +1266,7 @@ function App() {
                       src={imageUrl || ''}
                       alt={`${selectedHome.name} interior`}
                       onError={(e) => {
-                        console.error('Image failed to load:', imageUrl)
+                        console.error('Image failed to load:', imageUrl, 'Selected home:', selectedHome)
                         e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
                       }}
                     />
@@ -1288,7 +1290,7 @@ function App() {
                           {selectedHome.images.map((img, index) => (
                             <img
                               key={index}
-                              src={img.url}
+                              src={extractUrl(img)}
                               alt={`Thumbnail ${index + 1}`}
                               className={`gallery-thumbnail ${index === currentImageIndex ? 'active' : ''}`}
                               onClick={() => setCurrentImageIndex(index)}
@@ -1468,15 +1470,23 @@ function App() {
                       finalImages = [{ url: unit.image, is_primary: true, order_index: 0 }]
                     }
                     
-                    const unitImage = finalImages.find(i => i.is_primary)?.url || finalImages[0]?.url || ''
+                    // Extract URL from image object - handle multiple possible field names
+                    const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
+                    const unitImage = finalImages.length > 0 ? extractUrl(finalImages[0]) : ''
+                    
+                    // Normalize finalImages to have url field
+                    const normalizedImages = finalImages.map(img => ({
+                      ...img,
+                      url: extractUrl(img)
+                    }))
                     
                     // Debug logging
-                    console.log('Unit data:', { unit, unitImages, buildingImgs, finalImages, unitImage })
+                    console.log('Unit data:', { unit, unitImages, buildingImgs, finalImages, normalizedImages, unitImage })
                     
                     // Prepare unit object with proper image data for the modal
                     const unitForModal = {
                       ...unit,
-                      images: finalImages,
+                      images: normalizedImages,
                       image: unitImage,
                       building_name: selectedBuilding.name,
                       building_location: selectedBuilding.location,
@@ -1499,9 +1509,13 @@ function App() {
                         onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
                       >
                         <img
-                          src={unitImage}
+                          src={unitImage || ''}
                           alt={unit.name}
                           style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px' }}
+                          onError={(e) => {
+                            console.error('Unit thumbnail failed to load:', unitImage)
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
+                          }}
                         />
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
