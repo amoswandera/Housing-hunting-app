@@ -218,6 +218,36 @@ button { cursor: pointer; }
   backdrop-filter: blur(4px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
+.unit-selection-modal {
+  position: relative;
+  background: #fff;
+  max-width: 800px;
+  width: 100%;
+  border-radius: 12px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.unit-selection-modal .modal-top-bar {
+  position: relative;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.unit-selection-modal .close-button {
+  position: relative;
+  right: 0;
+  top: 0;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #3b5147;
+}
 
 .agent-contact-actions {
   display: flex;

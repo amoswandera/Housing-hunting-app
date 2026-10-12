@@ -1391,15 +1391,15 @@ function App() {
       )}
       {showUnitSelection && selectedBuilding && (
         <div className="modal-backdrop" onClick={() => { setShowUnitSelection(false); setSelectedBuilding(null); setBuildingUnits([]) }}>
-          <div className="booking-modal" style={{ maxWidth: '700px' }} onClick={(event) => event.stopPropagation()}>
+          <div className="unit-selection-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-top-bar">
               <button className="in-app-back-button" onClick={() => { setShowUnitSelection(false); setSelectedBuilding(null); setBuildingUnits([]) }}>
                 ← Back
               </button>
               <h2>{selectedBuilding.name}</h2>
-              <div></div>
+              <button className="close-button" onClick={() => { setShowUnitSelection(false); setSelectedBuilding(null); setBuildingUnits([]) }}>×</button>
             </div>
-            <div style={{ padding: '24px' }}>
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
               <p style={{ color: '#6b7280', marginBottom: '16px' }}>{selectedBuilding.location} · {selectedBuilding.availableUnits} units available</p>
               
               <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -1437,10 +1437,28 @@ function App() {
               ) : (
                 <div style={{ display: 'grid', gap: '16px' }}>
                   {buildingUnits.map((unit) => {
-                    // Use building images if unit has no image
-                    const unitImage = unit.image || (unit.building_images && unit.building_images.length > 0
-                      ? (unit.building_images.find(i => i.is_primary)?.url || unit.building_images[0].url)
-                      : '')
+                    // Prepare unit with proper image data for the detail modal
+                    const unitImages = unit.images || []
+                    const buildingImgs = unit.building_images || []
+                    let finalImages = unitImages
+                    if (unitImages.length === 0 && buildingImgs.length > 0) {
+                      finalImages = buildingImgs
+                    }
+                    if (finalImages.length === 0) {
+                      finalImages = [{ url: unit.image, is_primary: true, order_index: 0 }]
+                    }
+                    
+                    const unitImage = finalImages.find(i => i.is_primary)?.url || finalImages[0]?.url || ''
+                    
+                    // Prepare unit object with proper image data for the modal
+                    const unitForModal = {
+                      ...unit,
+                      images: finalImages,
+                      image: unitImage,
+                      building_name: selectedBuilding.name,
+                      building_location: selectedBuilding.location,
+                    }
+                    
                     return (
                       <div
                         key={unit.id}
@@ -1453,7 +1471,7 @@ function App() {
                           cursor: 'pointer',
                           transition: 'border-color 0.2s'
                         }}
-                        onClick={() => { setSelectedHome(unit); setShowUnitSelection(false) }}
+                        onClick={() => { setSelectedHome(unitForModal); setShowUnitSelection(false) }}
                         onMouseEnter={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
                         onMouseLeave={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
                       >
