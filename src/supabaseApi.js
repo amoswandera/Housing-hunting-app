@@ -1125,6 +1125,7 @@ export const fetchMyApplications = async (token) => {
       image: resolvedImage,
       home_available: Boolean(home?.available),
       payment_deadline: app.payment_deadline || null,
+      tenant_message: app.tenant_message || '', // Explicitly preserve tenant_message
     }
   })
 }
@@ -1226,6 +1227,7 @@ export const fetchAgentApplications = async (token) => {
       tenant_national_id: app.profiles?.national_id || '',
       tenant_occupation: app.profiles?.occupation || '',
       tenant_bio: app.profiles?.bio || '',
+      tenant_message: app.tenant_message || '', // Explicitly preserve tenant_message
       name: displayName,
       original_name: home.name,
       location: home.location || '',
