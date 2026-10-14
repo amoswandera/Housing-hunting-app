@@ -343,6 +343,8 @@ function App() {
   const [ratingStars, setRatingStars] = useState(0)
   const [ratingReview, setRatingReview] = useState('')
   const [selectedApplicationDetail, setSelectedApplicationDetail] = useState(null) // For viewing application details including tenant_message
+  const [expandedDiscoverCard, setExpandedDiscoverCard] = useState(null) // 'homes' or 'buildings' or null
+  const [expandedBookingsCard, setExpandedBookingsCard] = useState(null) // 'homes' or 'buildings' or null
 
   // Navigation helpers
   const navigateTo = useCallback((view) => {
@@ -981,17 +983,85 @@ function App() {
           {activeView === 'discover' && !showTenantProfile && <>
           <section className="welcome"><div><p className="eyebrow">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><h1>Find a place<br /><em>to feel at home.</em></h1><p className="intro">Thoughtfully selected homes in the places you want to be.</p></div><div className="welcome-art"><div className="sun"></div><div className="hill hill-one"></div><div className="hill hill-two"></div><div className="house-art">⌂</div></div></section>
           <section className="search-panel"><div className="search-field"><span>⌕</span><input value={query} onChange={(event) => { setQuery(event.target.value); setHomePage(1) }} placeholder="Search by neighbourhood or home" /></div><div className="select-field"><span>⌖</span><select value={region} onChange={(event) => { setRegion(event.target.value); setHomePage(1) }}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select></div><div className="select-field category-select"><span>⌂</span><select value={category} onChange={(event) => { setCategory(event.target.value); setHomePage(1) }}><option>All categories</option><option>Single room</option><option>Bedsitter</option><option>One bedroom</option><option>Two bedroom</option><option>Three bedroom</option><option>Four bedroom</option></select></div><div className="select-field category-select"><span>₭</span><select value={priceRange} onChange={(event) => { setPriceRange(event.target.value); setHomePage(1) }}><option>All prices</option><option>Under 30k</option><option>30k–60k</option><option>60k–100k</option><option>100k–200k</option><option>Over 200k</option></select></div><div className="select-field category-select"><span>⇅</span><select value={sortBy} onChange={(event) => { setSortBy(event.target.value); setHomePage(1) }}><option value="default">Default order</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="newest">Newest first</option></select></div><button className="search-button" onClick={() => showToast(`${filteredHomes.length} homes found`)}>Search homes <span>→</span></button></section>
-          <div className="content-heading"><div><h2>Homes for you</h2><p>{filteredHomesForDisplay.length + buildingsWithUnits.length} available home{filteredHomesForDisplay.length + buildingsWithUnits.length !== 1 ? 's' : ''}</p></div><button className="view-toggle active">▦</button><button className="view-toggle">☷</button></div>
-          <section className="home-grid">
-            {buildingsWithUnits.map(renderBuildingCard)}
-            {filteredHomesForDisplay.map(renderHomeCard)}
-          </section>
-          {filteredHomesForDisplay.length === 0 && buildingsWithUnits.length === 0 && <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>}
-          {filteredHomesForDisplay.length > homePage * PAGE_SIZE && (
-            <div style={{ textAlign: 'center', margin: '24px 0' }}>
-              <button onClick={() => setHomePage(p => p + 1)} style={{ background: 'none', border: '1px solid #d2ded5', color: '#3e735e', borderRadius: '6px', padding: '10px 28px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
-                Load more homes ({filteredHomesForDisplay.length - homePage * PAGE_SIZE} remaining)
-              </button>
+          
+          {/* Nested Cards for Discover */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+            {/* Homes Card */}
+            <div
+              onClick={() => { setExpandedDiscoverCard(expandedDiscoverCard === 'homes' ? null : 'homes') }}
+              style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '24px',
+                border: '1px solid #e5e7eb',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+            >
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
+              <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Homes</h3>
+              <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Standalone houses and apartments</p>
+              <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{filteredHomesForDisplay.length}</div>
+              <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Available homes</p>
+            </div>
+
+            {/* Apartments/Buildings Card */}
+            <div
+              onClick={() => { setExpandedDiscoverCard(expandedDiscoverCard === 'buildings' ? null : 'buildings') }}
+              style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '24px',
+                border: '1px solid #e5e7eb',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+            >
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
+              <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Apartments</h3>
+              <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Units in apartment buildings</p>
+              <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{buildingsWithUnits.length}</div>
+              <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Available buildings</p>
+            </div>
+          </div>
+
+          {/* Expanded Homes View */}
+          {expandedDiscoverCard === 'homes' && (
+            <div style={{ marginBottom: '32px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ margin: 0 }}>Homes</h2>
+                <button onClick={() => setExpandedDiscoverCard(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: 'none', border: '1px solid #d2ded5', borderRadius: '6px' }}>Close</button>
+              </div>
+              {filteredHomesForDisplay.length > 0 ? (
+                <section className="home-grid">
+                  {filteredHomesForDisplay.map(renderHomeCard)}
+                </section>
+              ) : (
+                <div className="empty-state"><strong>No homes found</strong><span>Try a different neighbourhood or region.</span></div>
+              )}
+            </div>
+          )}
+
+          {/* Expanded Buildings View */}
+          {expandedDiscoverCard === 'buildings' && (
+            <div style={{ marginBottom: '32px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ margin: 0 }}>Apartments</h2>
+                <button onClick={() => setExpandedDiscoverCard(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: 'none', border: '1px solid #d2ded5', borderRadius: '6px' }}>Close</button>
+              </div>
+              {buildingsWithUnits.length > 0 ? (
+                <section className="home-grid">
+                  {buildingsWithUnits.map(renderBuildingCard)}
+                </section>
+              ) : (
+                <div className="empty-state"><strong>No apartments found</strong><span>Try a different neighbourhood or region.</span></div>
+              )}
             </div>
           )}
           </>}
@@ -1007,152 +1077,359 @@ function App() {
           </>}
           {activeView === 'bookings' && !showTenantProfile && <>
           <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => navigateBack()}>← Back</button></div>
-          <div className="content-heading"><div><h2>My bookings</h2><p>Applications are reviewed by each house agent.</p></div></div>
-          <div className="table-panel" style={{ marginTop: '0' }}>
-            <div className="users-toolbar" style={{ marginBottom: '16px' }}>
-              <select
-                className="role-filter"
-                value={bookingStatusFilter}
-                onChange={(e) => setBookingStatusFilter(e.target.value)}
-                aria-label="Filter by status"
-                style={{ minWidth: '160px' }}
-              >
-                <option value="All">All statuses</option>
-                <option value="submitted">Submitted</option>
-                <option value="approved">Approved</option>
-                <option value="declined">Declined</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="refunded">Refunded</option>
-              </select>
-              <span style={{ fontSize: '11px', color: '#7f9585', marginLeft: '8px' }}>
-                {applications.filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter).length} application{applications.filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter).length !== 1 ? 's' : ''}
-              </span>
+          
+          {/* Nested Cards for Bookings */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+            {/* Home Applications Card */}
+            <div
+              onClick={() => { setExpandedBookingsCard(expandedBookingsCard === 'homes' ? null : 'homes') }}
+              style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '24px',
+                border: '1px solid #e5e7eb',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+            >
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
+              <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Home Applications</h3>
+              <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Applications for standalone homes</p>
+              <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{applications.filter(a => !a.building_id).length}</div>
+              <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total applications</p>
             </div>
-            {applications.length > 0 ? (
-              <div className="users-table-wrap">
-                <table className="users-table applications-table">
-                  <thead>
-                    <tr>
-                      <th>Home</th>
-                      <th>Status</th>
-                      <th>Agent</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applications
-                      .filter(a => bookingStatusFilter === 'All' || a.status === bookingStatusFilter)
-                      .map((application) => (
-                      <tr key={application.id}>
-                        <td>
-                          <div className="users-table-name">
-                            {application.image ? (
-                              <img
-                                src={application.image}
-                                alt={application.name}
-                                style={{
-                                  width: '44px',
-                                  height: '44px',
-                                  borderRadius: '5px',
-                                  flexShrink: 0,
-                                  objectFit: 'cover',
-                                }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: '44px', height: '44px', borderRadius: '5px', flexShrink: 0,
-                                background: '#e4ecdf',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '18px', color: '#6c9a77'
-                              }}>
-                                ⌂
-                              </div>
-                            )}
-                            <div>
-                              <strong>{application.name || 'Home no longer listed'}</strong>
-                              {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
-                            </div>
-                          </div>
-                        </td>
-                        <td><span className={`application-status ${application.status}`}>{application.status}</span></td>
-                        <td>
-                          {application.agent_phone ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2d443b' }}>{application.agent_name || 'House Agent'}</span>
-                              <div style={{ display: 'flex', gap: '6px' }}>
-                                <a href={`tel:${cleanPhoneNumber(application.agent_phone)}`} className="contact-btn call-btn mini" title="Call Agent"><span>📞</span> Call</a>
-                                <a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a>
-                              </div>
-                            </div>
-                          ) : <span style={{ color: '#9aa49e', fontSize: '11px' }}>—</span>}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {application.status === 'approved' && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                {application.contract_pdf_url
-                                  ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
-                                  : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
-                                {application.payment_deadline && application.payment_status !== 'paid' && (
-                                  <span style={{ fontSize: '10px', color: new Date(application.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
-                                    {new Date(application.payment_deadline) < new Date()
-                                      ? '⚠ Payment deadline passed'
-                                      : `⏰ Pay by ${new Date(application.payment_deadline).toLocaleString()}`}
-                                  </span>
-                                )}
-                                {application.payment_status !== 'paid' && (
-                                  <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
-                                    onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
-                                    Make payment
-                                  </button>
-                                )}
-                                {application.payment_status === 'paid' && <span style={{ fontSize: '10px', color: '#568666', fontWeight: 700 }}>✓ Deposit paid</span>}
-                              </div>
-                            )}
-                            {application.status === 'submitted' && (
-                              <button style={{ border: 0, background: 'none', color: '#c97861', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer' }}
-                                onClick={() => cancelBooking(application.home_id)}>
-                              Cancel
-                            </button>
-                            )}
-                            {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
-                            {/* Message button — always visible for active applications */}
-                            {['submitted', 'approved'].includes(application.status) && (
-                              <button style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                                onClick={async () => {
-                                  if (openMessageAppId === application.id) {
-                                    setOpenMessageAppId(null)
-                                  } else {
-                                    setOpenMessageAppId(application.id)
-                                    await loadMessages(application.id)
-                                  }
-                                }}>
-                                💬 {openMessageAppId === application.id ? 'Close messages' : 'Messages'}
-                              </button>
-                            )}
-                            {/* Rate button — only for approved applications */}
-                            {application.status === 'approved' && application.payment_status === 'paid' && (
-                              <button style={{ border: 0, background: 'none', color: '#d59a54', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                                onClick={() => openRatingModal(application)}>
-                                ★ Rate this home
-                              </button>
-                            )}
-                            {/* View details button - shows tenant message */}
-                            <button style={{ border: 0, background: 'none', color: '#6b7280', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                              onClick={() => setSelectedApplicationDetail(application)}>
-                              View details
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="empty-state"><strong>No bookings yet</strong><span>Apply for a home and it will appear here.</span></div>
-            )}
+
+            {/* Building Applications Card */}
+            <div
+              onClick={() => { setExpandedBookingsCard(expandedBookingsCard === 'buildings' ? null : 'buildings') }}
+              style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '24px',
+                border: '1px solid #e5e7eb',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                ':hover': { borderColor: '#3b82f6', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.1)' }
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.1)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none' }}
+            >
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
+              <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Apartment Applications</h3>
+              <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Applications for apartment units</p>
+              <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{applications.filter(a => a.building_id).length}</div>
+              <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Total applications</p>
+            </div>
           </div>
+
+          {/* Expanded Home Applications View */}
+          {expandedBookingsCard === 'homes' && (
+            <div className="table-panel" style={{ marginTop: '0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ margin: 0 }}>Home Applications</h2>
+                <button onClick={() => setExpandedBookingsCard(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: 'none', border: '1px solid #d2ded5', borderRadius: '6px' }}>Close</button>
+              </div>
+              <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+                <select
+                  className="role-filter"
+                  value={bookingStatusFilter}
+                  onChange={(e) => setBookingStatusFilter(e.target.value)}
+                  aria-label="Filter by status"
+                  style={{ minWidth: '160px' }}
+                >
+                  <option value="All">All statuses</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="approved">Approved</option>
+                  <option value="declined">Declined</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+                <span style={{ fontSize: '11px', color: '#7f9585', marginLeft: '8px' }}>
+                  {applications.filter(a => !a.building_id && (bookingStatusFilter === 'All' || a.status === bookingStatusFilter)).length} application{applications.filter(a => !a.building_id && (bookingStatusFilter === 'All' || a.status === bookingStatusFilter)).length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {applications.filter(a => !a.building_id).length > 0 ? (
+                <div className="users-table-wrap">
+                  <table className="users-table applications-table">
+                    <thead>
+                      <tr>
+                        <th>Home</th>
+                        <th>Status</th>
+                        <th>Agent</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications
+                        .filter(a => !a.building_id && (bookingStatusFilter === 'All' || a.status === bookingStatusFilter))
+                        .map((application) => (
+                        <tr key={application.id}>
+                          <td>
+                            <div className="users-table-name">
+                              {application.image ? (
+                                <img
+                                  src={application.image}
+                                  alt={application.name}
+                                  style={{
+                                    width: '44px',
+                                    height: '44px',
+                                    borderRadius: '5px',
+                                    flexShrink: 0,
+                                    objectFit: 'cover',
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: '44px', height: '44px', borderRadius: '5px', flexShrink: 0,
+                                  background: '#e4ecdf',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '18px', color: '#6c9a77'
+                                }}>
+                                  ⌂
+                                </div>
+                              )}
+                              <div>
+                                <strong>{application.name || 'Home no longer listed'}</strong>
+                                {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
+                              </div>
+                            </div>
+                          </td>
+                          <td><span className={`application-status ${application.status}`}>{application.status}</span></td>
+                          <td>
+                            {application.agent_phone ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#2d443b' }}>{application.agent_name || 'House Agent'}</span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <a href={`tel:${cleanPhoneNumber(application.agent_phone)}`} className="contact-btn call-btn mini" title="Call Agent"><span>📞</span> Call</a>
+                                  <a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a>
+                                </div>
+                              </div>
+                            ) : <span style={{ color: '#9aa49e', fontSize: '11px' }}>—</span>}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {application.status === 'approved' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {application.contract_pdf_url
+                                    ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
+                                    : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
+                                  {application.payment_deadline && application.payment_status !== 'paid' && (
+                                    <span style={{ fontSize: '10px', color: new Date(application.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
+                                      {new Date(application.payment_deadline) < new Date()
+                                        ? '⚠ Payment deadline passed'
+                                        : `⏰ Pay by ${new Date(application.payment_deadline).toLocaleString()}`}
+                                    </span>
+                                  )}
+                                  {application.payment_status !== 'paid' && (
+                                    <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                      onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
+                                      Make payment
+                                    </button>
+                                  )}
+                                  {application.payment_status === 'paid' && <span style={{ fontSize: '10px', color: '#568666', fontWeight: 700 }}>✓ Deposit paid</span>}
+                                </div>
+                              )}
+                              {application.status === 'submitted' && (
+                                <button style={{ border: 0, background: 'none', color: '#c97861', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer' }}
+                                  onClick={() => cancelBooking(application.home_id)}>
+                                Cancel
+                              </button>
+                              )}
+                              {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
+                              {/* Message button — always visible for active applications */}
+                              {['submitted', 'approved'].includes(application.status) && (
+                                <button style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                  onClick={async () => {
+                                    if (openMessageAppId === application.id) {
+                                      setOpenMessageAppId(null)
+                                    } else {
+                                      setOpenMessageAppId(application.id)
+                                      await loadMessages(application.id)
+                                    }
+                                  }}>
+                                  💬 {openMessageAppId === application.id ? 'Close messages' : 'Messages'}
+                                </button>
+                              )}
+                              {/* Rate button — only for approved applications */}
+                              {application.status === 'approved' && application.payment_status === 'paid' && (
+                                <button style={{ border: 0, background: 'none', color: '#d59a54', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                  onClick={() => openRatingModal(application)}>
+                                  ★ Rate this home
+                                </button>
+                              )}
+                              {/* View details button - shows tenant message */}
+                              <button style={{ border: 0, background: 'none', color: '#6b7280', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                onClick={() => setSelectedApplicationDetail(application)}>
+                                View details
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="empty-state"><strong>No home applications</strong><span>You haven't applied for any standalone homes yet.</span></div>
+              )}
+            </div>
+          )}
+
+          {/* Expanded Building Applications View */}
+          {expandedBookingsCard === 'buildings' && (
+            <div className="table-panel" style={{ marginTop: '0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ margin: 0 }}>Apartment Applications</h2>
+                <button onClick={() => setExpandedBookingsCard(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: 'none', border: '1px solid #d2ded5', borderRadius: '6px' }}>Close</button>
+              </div>
+              <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+                <select
+                  className="role-filter"
+                  value={bookingStatusFilter}
+                  onChange={(e) => setBookingStatusFilter(e.target.value)}
+                  aria-label="Filter by status"
+                  style={{ minWidth: '160px' }}
+                >
+                  <option value="All">All statuses</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="approved">Approved</option>
+                  <option value="declined">Declined</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+                <span style={{ fontSize: '11px', color: '#7f9585', marginLeft: '8px' }}>
+                  {applications.filter(a => a.building_id && (bookingStatusFilter === 'All' || a.status === bookingStatusFilter)).length} application{applications.filter(a => a.building_id && (bookingStatusFilter === 'All' || a.status === bookingStatusFilter)).length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {applications.filter(a => a.building_id).length > 0 ? (
+                <div className="users-table-wrap">
+                  <table className="users-table applications-table">
+                    <thead>
+                      <tr>
+                        <th>Apartment</th>
+                        <th>Status</th>
+                        <th>Agent</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications
+                        .filter(a => a.building_id && (bookingStatusFilter === 'All' || a.status === bookingStatusFilter))
+                        .map((application) => (
+                        <tr key={application.id}>
+                          <td>
+                            <div className="users-table-name">
+                              {application.image ? (
+                                <img
+                                  src={application.image}
+                                  alt={application.name}
+                                  style={{
+                                    width: '44px',
+                                    height: '44px',
+                                    borderRadius: '5px',
+                                    flexShrink: 0,
+                                    objectFit: 'cover',
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: '44px', height: '44px', borderRadius: '5px', flexShrink: 0,
+                                  background: '#e4ecdf',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '18px', color: '#6c9a77'
+                                }}>
+                                  🏢
+                                </div>
+                              )}
+                              <div>
+                                <strong>{application.name || 'Apartment no longer listed'}</strong>
+                                {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
+                              </div>
+                            </div>
+                          </td>
+                          <td><span className={`application-status ${application.status}`}>{application.status}</span></td>
+                          <td>
+                            {application.agent_phone ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#2d443b' }}>{application.agent_name || 'House Agent'}</span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <a href={`tel:${cleanPhoneNumber(application.agent_phone)}`} className="contact-btn call-btn mini" title="Call Agent"><span>📞</span> Call</a>
+                                  <a href={getWhatsAppUrl(application.agent_phone, application.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn mini" title="WhatsApp Agent"><span>💬</span> WhatsApp</a>
+                                </div>
+                              </div>
+                            ) : <span style={{ color: '#9aa49e', fontSize: '11px' }}>—</span>}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {application.status === 'approved' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {application.contract_pdf_url
+                                    ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
+                                    : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
+                                  {application.payment_deadline && application.payment_status !== 'paid' && (
+                                    <span style={{ fontSize: '10px', color: new Date(application.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
+                                      {new Date(application.payment_deadline) < new Date()
+                                        ? '⚠ Payment deadline passed'
+                                        : `⏰ Pay by ${new Date(application.payment_deadline).toLocaleString()}`}
+                                    </span>
+                                  )}
+                                  {application.payment_status !== 'paid' && (
+                                    <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                      onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
+                                      Make payment
+                                    </button>
+                                  )}
+                                  {application.payment_status === 'paid' && <span style={{ fontSize: '10px', color: '#568666', fontWeight: 700 }}>✓ Deposit paid</span>}
+                                </div>
+                              )}
+                              {application.status === 'submitted' && (
+                                <button style={{ border: 0, background: 'none', color: '#c97861', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer' }}
+                                  onClick={() => cancelBooking(application.home_id)}>
+                                Cancel
+                              </button>
+                              )}
+                              {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
+                              {/* Message button — always visible for active applications */}
+                              {['submitted', 'approved'].includes(application.status) && (
+                                <button style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                  onClick={async () => {
+                                    if (openMessageAppId === application.id) {
+                                      setOpenMessageAppId(null)
+                                    } else {
+                                      setOpenMessageAppId(application.id)
+                                      await loadMessages(application.id)
+                                    }
+                                  }}>
+                                  💬 {openMessageAppId === application.id ? 'Close messages' : 'Messages'}
+                                </button>
+                              )}
+                              {/* Rate button — only for approved applications */}
+                              {application.status === 'approved' && application.payment_status === 'paid' && (
+                                <button style={{ border: 0, background: 'none', color: '#d59a54', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                  onClick={() => openRatingModal(application)}>
+                                  ★ Rate this home
+                                </button>
+                              )}
+                              {/* View details button - shows tenant message */}
+                              <button style={{ border: 0, background: 'none', color: '#6b7280', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                onClick={() => setSelectedApplicationDetail(application)}>
+                                View details
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="empty-state"><strong>No apartment applications</strong><span>You haven't applied for any apartment units yet.</span></div>
+              )}
+            </div>
+          )}
           </>}
         </>}
 
