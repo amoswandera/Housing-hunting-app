@@ -52,6 +52,11 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [applicationSearch, setApplicationSearch] = useState('')
   const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
+  const [buildingSearch, setBuildingSearch] = useState('')
+  const [buildingRegionFilter, setBuildingRegionFilter] = useState('All regions')
+  const [unitCategoryFilter, setUnitCategoryFilter] = useState('All categories')
+  const [unitFloorFilter, setUnitFloorFilter] = useState('All floors')
+  const [unitPriceFilter, setUnitPriceFilter] = useState('')
   const [selectedHome, setSelectedHome] = useState(null)
   const [internalView, setInternalView] = useState(view === 'profile' ? 'profile' : 'dashboard') // 'dashboard', 'homes', 'applications', 'buildings', or 'profile'
   const [showBuildingForm, setShowBuildingForm] = useState(false)
@@ -1938,18 +1943,23 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                     <h3 style={{ margin: 0 }}>Buildings with Available Units</h3>
                     <button onClick={() => setExpandedBuildingSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
                   </div>
+                  <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+                    <div className="search-field admin-user-search"><span>⌕</span><input value={buildingSearch} onChange={e => setBuildingSearch(e.target.value)} placeholder="Search buildings" /></div>
+                    <select className="role-filter" value={buildingRegionFilter} onChange={e => setBuildingRegionFilter(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                  </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Region</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {buildings.filter(b => b.available_units > 0).map((building) => {
+                      {buildings.filter(b => b.available_units > 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).map((building) => {
                         const primaryImage = building.images && building.images.length > 0
                           ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
                           : ''
@@ -1968,13 +1978,17 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                               </div>
                             </td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.region}</td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
                             <td style={{ padding: '12px' }}>
                               <button
                                 onClick={async () => {
                                   setSelectedBuilding(building);
-                                  const units = await fetchUnitsInBuilding(building.id, token);
+                                  const units = await fetchUnitsInBuilding(building.id, token, {
+                                    category: unitCategoryFilter,
+                                    floor: unitFloorFilter
+                                  });
                                   setBuildingUnits(units);
                                   setShowUnitsList(true);
                                   navigateTo('buildings');
@@ -2001,7 +2015,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       })}
                     </tbody>
                   </table>
-                  {buildings.filter(b => b.available_units > 0).length === 0 && (
+                  {buildings.filter(b => b.available_units > 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).length === 0 && (
                     <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
                       <p style={{ fontSize: '16px', marginBottom: '8px' }}>No buildings with available units</p>
                       <p style={{ fontSize: '14px' }}>All units in your buildings are currently occupied</p>
@@ -2016,18 +2030,23 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                     <h3 style={{ margin: 0 }}>Full Buildings</h3>
                     <button onClick={() => setExpandedBuildingSection(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: '#f3f4f6', border: 'none', borderRadius: '6px' }}>Close</button>
                   </div>
+                  <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+                    <div className="search-field admin-user-search"><span>⌕</span><input value={buildingSearch} onChange={e => setBuildingSearch(e.target.value)} placeholder="Search buildings" /></div>
+                    <select className="role-filter" value={buildingRegionFilter} onChange={e => setBuildingRegionFilter(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                  </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Region</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {buildings.filter(b => b.available_units === 0).map((building) => {
+                      {buildings.filter(b => b.available_units === 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).map((building) => {
                         const primaryImage = building.images && building.images.length > 0
                           ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
                           : ''
@@ -2046,13 +2065,17 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                               </div>
                             </td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.region}</td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
                             <td style={{ padding: '12px' }}>
                               <button
                                 onClick={async () => {
                                   setSelectedBuilding(building);
-                                  const units = await fetchUnitsInBuilding(building.id, token);
+                                  const units = await fetchUnitsInBuilding(building.id, token, {
+                                    category: unitCategoryFilter,
+                                    floor: unitFloorFilter
+                                  });
                                   setBuildingUnits(units);
                                   setShowUnitsList(true);
                                   navigateTo('buildings');
@@ -2073,7 +2096,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       })}
                     </tbody>
                   </table>
-                  {buildings.filter(b => b.available_units === 0).length === 0 && (
+                  {buildings.filter(b => b.available_units === 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).length === 0 && (
                     <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
                       <p style={{ fontSize: '16px', marginBottom: '8px' }}>No full buildings</p>
                       <p style={{ fontSize: '14px' }}>All your buildings have at least one available unit</p>
@@ -2094,6 +2117,47 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
             <span>{buildingUnits.length} unit{buildingUnits.length === 1 ? '' : 's'}</span>
             <button onClick={() => { setShowUnitsList(false); setSelectedBuilding(null); navigateBack() }} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
           </div>
+          <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+            <div className="select-field">
+              <span>⌂</span>
+              <select
+                value={unitCategoryFilter}
+                onChange={(e) => setUnitCategoryFilter(e.target.value)}
+              >
+                <option value="All categories">All categories</option>
+                <option value="Studio">Studio</option>
+                <option value="1BR">1BR</option>
+                <option value="2BR">2BR</option>
+                <option value="3BR">3BR</option>
+                <option value="4BR">4BR+</option>
+              </select>
+            </div>
+            <div className="select-field">
+              <span>🏢</span>
+              <select
+                value={unitFloorFilter}
+                onChange={(e) => setUnitFloorFilter(e.target.value)}
+              >
+                <option value="All floors">All floors</option>
+                <option value="Ground">Ground</option>
+                <option value="1">1st Floor</option>
+                <option value="2">2nd Floor</option>
+                <option value="3">3rd Floor</option>
+                <option value="4">4th Floor</option>
+                <option value="5">5th Floor</option>
+                <option value="6">6th Floor+</option>
+              </select>
+            </div>
+            <div className="search-field admin-user-search">
+              <span>⌕</span>
+              <input
+                value={unitPriceFilter}
+                onChange={(e) => setUnitPriceFilter(e.target.value)}
+                placeholder="Max price (KES)"
+                type="number"
+              />
+            </div>
+          </div>
           {buildingUnits.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
@@ -2113,7 +2177,12 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 </tr>
               </thead>
               <tbody>
-                {buildingUnits.map((unit) => (
+                {buildingUnits.filter(unit => {
+                  const categoryMatch = unitCategoryFilter === 'All categories' || unit.category === unitCategoryFilter
+                  const floorMatch = unitFloorFilter === 'All floors' || unit.floor === unitFloorFilter
+                  const priceMatch = unitPriceFilter === '' || unit.price <= Number(unitPriceFilter)
+                  return categoryMatch && floorMatch && priceMatch
+                }).map((unit) => (
                   <tr key={unit.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                     <td style={{ padding: '12px', fontSize: '13px', fontWeight: 500 }}>{unit.unit_number}</td>
                     <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{unit.floor}</td>

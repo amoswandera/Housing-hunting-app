@@ -1056,6 +1056,10 @@ function App() {
                 <h2 style={{ margin: 0 }}>Apartments</h2>
                 <button onClick={() => setExpandedDiscoverCard(null)} style={{ padding: '8px 16px', cursor: 'pointer', background: 'none', border: '1px solid #d2ded5', borderRadius: '6px' }}>Close</button>
               </div>
+              <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+                <div className="search-field admin-user-search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search apartments" /></div>
+                <select className="role-filter" value={region} onChange={e => setRegion(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+              </div>
               {buildingsWithUnits.length > 0 ? (
                 <section className="home-grid">
                   {buildingsWithUnits.map(renderBuildingCard)}
