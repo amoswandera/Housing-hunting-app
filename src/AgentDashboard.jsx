@@ -77,7 +77,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [expandedApplicationSection, setExpandedApplicationSection] = useState(null) // 'home' or 'building' or null
   const [expandedHomeSection, setExpandedHomeSection] = useState(null) // 'available' or 'taken' or null
   const [expandedBuildingSection, setExpandedBuildingSection] = useState(null) // 'available' or 'full' or null
-  const [navigationHistory, setNavigationHistory] = useState(['dashboard']) // Track navigation history for back button
+  const [navigationHistory, setNavigationHistory] = useState([view === 'profile' ? 'profile' : 'dashboard']) // Track navigation history for back button
   const [editingHome, setEditingHome] = useState(null) // Home being edited
   const [editingBuilding, setEditingBuilding] = useState(null) // Building being edited
   const [editingUnit, setEditingUnit] = useState(null) // Unit being edited
@@ -691,7 +691,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         <form className="listing-form profile-form" onSubmit={saveProfile}>
           <div className="form-header-bar">
             <h2>Agent profile</h2>
-            {!profileNudge && <button type="button" className="in-app-back-button" onClick={navigateBack}>← Back</button>}
+            {!profileNudge && <button type="button" className="in-app-back-button" onClick={() => { setShowProfile(false); navigateBack() }}>← Back</button>}
           </div>
           {profileNudge && (
             <p className="profile-nudge" style={{ background: '#fdf6ed', color: '#9c5b1c', padding: '12px 14px', borderRadius: '6px', borderLeft: '4px solid #e08b2d', marginBottom: '14px', fontSize: '11px', lineHeight: '1.5' }}>

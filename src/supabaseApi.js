@@ -2363,7 +2363,7 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
     .from('homes')
     .select('*')
     .eq('building_id', buildingId)
-    .eq('available', true)
+    // Removed .eq('available', true) to show all units including taken ones
 
   if (filters.category && filters.category !== 'All') {
     query = query.eq('category', filters.category)
