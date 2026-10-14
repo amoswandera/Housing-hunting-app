@@ -342,6 +342,7 @@ function App() {
   const [ratingModal, setRatingModal] = useState(null) // { homeId, homeName, existing }
   const [ratingStars, setRatingStars] = useState(0)
   const [ratingReview, setRatingReview] = useState('')
+  const [selectedApplicationDetail, setSelectedApplicationDetail] = useState(null) // For viewing application details including tenant_message
 
   // Navigation helpers
   const navigateTo = useCallback((view) => {
@@ -372,6 +373,10 @@ function App() {
       setPaymentApplication(null)
       return true
     }
+    if (selectedApplicationDetail) {
+      setSelectedApplicationDetail(null)
+      return true
+    }
     if (mobileMenuOpen) {
       setMobileMenuOpen(false)
       return true
@@ -387,7 +392,7 @@ function App() {
       return true
     }
     return false
-  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, showTenantProfile, currentImageIndex, navigateBack])
+  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, selectedApplicationDetail, showTenantProfile, currentImageIndex, navigateBack])
 
   // Manage browser history so hardware back buttons on Android WebView / browsers step back instead of exiting
   useEffect(() => {
@@ -399,10 +404,10 @@ function App() {
   }, [handleBack])
 
   useEffect(() => {
-    if (selectedHome || paymentApplication || showTenantProfile || activeView !== 'discover' || mobileMenuOpen) {
+    if (selectedHome || paymentApplication || selectedApplicationDetail || showTenantProfile || activeView !== 'discover' || mobileMenuOpen) {
       window.history.pushState({ inAppView: true }, '')
     }
-  }, [selectedHome, paymentApplication, showTenantProfile, activeView, mobileMenuOpen])
+  }, [selectedHome, paymentApplication, selectedApplicationDetail, showTenantProfile, activeView, mobileMenuOpen])
 
   // Capacitor native hardware back button listener
   useEffect(() => {
@@ -1082,55 +1087,62 @@ function App() {
                           ) : <span style={{ color: '#9aa49e', fontSize: '11px' }}>—</span>}
                         </td>
                         <td>
-                          {application.status === 'approved' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              {application.contract_pdf_url
-                                ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
-                                : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
-                              {application.payment_deadline && application.payment_status !== 'paid' && (
-                                <span style={{ fontSize: '10px', color: new Date(application.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
-                                  {new Date(application.payment_deadline) < new Date()
-                                    ? '⚠ Payment deadline passed'
-                                    : `⏰ Pay by ${new Date(application.payment_deadline).toLocaleString()}`}
-                                </span>
-                              )}
-                              {application.payment_status !== 'paid' && (
-                                <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
-                                  onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
-                                  Make payment
-                                </button>
-                              )}
-                              {application.payment_status === 'paid' && <span style={{ fontSize: '10px', color: '#568666', fontWeight: 700 }}>✓ Deposit paid</span>}
-                            </div>
-                          )}
-                          {application.status === 'submitted' && (
-                            <button style={{ border: 0, background: 'none', color: '#c97861', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer' }}
-                              onClick={() => cancelBooking(application.home_id)}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {application.status === 'approved' && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {application.contract_pdf_url
+                                  ? <a href={application.contract_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#3e735e', fontWeight: 700 }}>View contract ↗</a>
+                                  : <span style={{ fontSize: '10px', color: '#9aa49e' }}>Contract pending</span>}
+                                {application.payment_deadline && application.payment_status !== 'paid' && (
+                                  <span style={{ fontSize: '10px', color: new Date(application.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
+                                    {new Date(application.payment_deadline) < new Date()
+                                      ? '⚠ Payment deadline passed'
+                                      : `⏰ Pay by ${new Date(application.payment_deadline).toLocaleString()}`}
+                                  </span>
+                                )}
+                                {application.payment_status !== 'paid' && (
+                                  <button style={{ border: 0, background: 'none', color: '#d9775d', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                    onClick={() => { setPaymentApplication(application); setPaymentPhone(authUser.phone || ''); setPaymentAmount(application.deposit) }}>
+                                    Make payment
+                                  </button>
+                                )}
+                                {application.payment_status === 'paid' && <span style={{ fontSize: '10px', color: '#568666', fontWeight: 700 }}>✓ Deposit paid</span>}
+                              </div>
+                            )}
+                            {application.status === 'submitted' && (
+                              <button style={{ border: 0, background: 'none', color: '#c97861', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer' }}
+                                onClick={() => cancelBooking(application.home_id)}>
                               Cancel
                             </button>
-                          )}
-                          {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
-                          {/* Message button — always visible for active applications */}
-                          {['submitted', 'approved'].includes(application.status) && (
-                            <button style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                              onClick={async () => {
-                                if (openMessageAppId === application.id) {
-                                  setOpenMessageAppId(null)
-                                } else {
-                                  setOpenMessageAppId(application.id)
-                                  await loadMessages(application.id)
-                                }
-                              }}>
-                              💬 {openMessageAppId === application.id ? 'Close messages' : 'Messages'}
+                            )}
+                            {!['approved', 'submitted'].includes(application.status) && <span style={{ color: '#9aa49e', fontSize: '10px' }}>—</span>}
+                            {/* Message button — always visible for active applications */}
+                            {['submitted', 'approved'].includes(application.status) && (
+                              <button style={{ border: 0, background: 'none', color: '#3e735e', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                onClick={async () => {
+                                  if (openMessageAppId === application.id) {
+                                    setOpenMessageAppId(null)
+                                  } else {
+                                    setOpenMessageAppId(application.id)
+                                    await loadMessages(application.id)
+                                  }
+                                }}>
+                                💬 {openMessageAppId === application.id ? 'Close messages' : 'Messages'}
+                              </button>
+                            )}
+                            {/* Rate button — only for approved applications */}
+                            {application.status === 'approved' && application.payment_status === 'paid' && (
+                              <button style={{ border: 0, background: 'none', color: '#d59a54', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                                onClick={() => openRatingModal(application)}>
+                                ★ Rate this home
+                              </button>
+                            )}
+                            {/* View details button - shows tenant message */}
+                            <button style={{ border: 0, background: 'none', color: '#6b7280', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
+                              onClick={() => setSelectedApplicationDetail(application)}>
+                              View details
                             </button>
-                          )}
-                          {/* Rate button — only for approved applications */}
-                          {application.status === 'approved' && application.payment_status === 'paid' && (
-                            <button style={{ border: 0, background: 'none', color: '#d59a54', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                              onClick={() => openRatingModal(application)}>
-                              ★ Rate this home
-                            </button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                       ))}
@@ -1686,6 +1698,40 @@ function App() {
             <button className="primary-action" type="submit">Pay and send prompt <span>→</span></button>
             <small>The backend will send a prompt when Safaricom Daraja credentials are configured.</small>
           </form>
+        </div>
+      )}
+
+      {/* Application Detail Modal - shows tenant message */}
+      {selectedApplicationDetail && (
+        <div className="modal-backdrop" onClick={() => setSelectedApplicationDetail(null)}>
+          <div className="booking-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="form-header-bar">
+              <button type="button" className="in-app-back-button" onClick={() => setSelectedApplicationDetail(null)}>← Back</button>
+              <button type="button" className="close-button" onClick={() => setSelectedApplicationDetail(null)}>×</button>
+            </div>
+            <p className="eyebrow">Application Details</p>
+            <h2>{selectedApplicationDetail.name || 'Home'}</h2>
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '12px', color: '#3e735e' }}>Status:</strong>
+                <span className={`application-status ${selectedApplicationDetail.status}`} style={{ marginLeft: '8px' }}>{selectedApplicationDetail.status}</span>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '12px', color: '#3e735e' }}>Location:</strong>
+                <span style={{ marginLeft: '8px', fontSize: '13px' }}>{selectedApplicationDetail.location || '—'}</span>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '12px', color: '#3e735e' }}>Applied on:</strong>
+                <span style={{ marginLeft: '8px', fontSize: '13px' }}>{new Date(selectedApplicationDetail.created_at).toLocaleDateString()}</span>
+              </div>
+              {selectedApplicationDetail.tenant_message && (
+                <div style={{ marginBottom: '12px', background: '#f6f9f5', padding: '12px', borderRadius: '6px' }}>
+                  <strong style={{ fontSize: '12px', color: '#3e735e', display: 'block', marginBottom: '6px' }}>Your message:</strong>
+                  <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#1d3d33' }}>{selectedApplicationDetail.tenant_message}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
