@@ -1228,7 +1228,7 @@ function App() {
 
       {!authUser && (
         <nav className="mobile-bottom-nav">
-          <button className={`mobile-nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { navigateTo('discover'); setMobileMenuOpen(false) }}>
             <span>⌂</span> Discover
           </button>
           <button className={`mobile-nav-item`} onClick={() => setShowAuthScreen(true)}>
@@ -1238,48 +1238,51 @@ function App() {
       )}
       {authUser?.role === 'Tenant' && (
         <nav className="mobile-bottom-nav">
-          <button className={`mobile-nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
             <span>⌂</span> Discover
           </button>
-          <button className={`mobile-nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
             <span>♡</span> Saved
             {saved.length > 0 && <b className="mobile-nav-badge">{saved.length}</b>}
           </button>
-          <button className={`mobile-nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}>
             <span>▣</span> Bookings
             {booked.length > 0 && <b className="mobile-nav-badge">{booked.length}</b>}
           </button>
-          <button className={`mobile-nav-item ${showTenantProfile ? 'active' : ''}`} onClick={() => { setShowTenantProfile(true); setActiveView('profile'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}>
             <span>♙</span> Profile
           </button>
         </nav>
       )}
       {authUser?.role === 'Agent' && (
         <nav className="mobile-bottom-nav">
-          <button className={`mobile-nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { navigateTo('agent-dashboard'); setMobileMenuOpen(false) }}>
             <span>◈</span> Dashboard
           </button>
-          <button className={`mobile-nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { navigateTo('agent-homes'); setMobileMenuOpen(false) }}>
             <span>⌂</span> Homes
           </button>
-          <button className={`mobile-nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { navigateTo('agent-applications'); setMobileMenuOpen(false) }}>
             <span>📋</span> Applications
           </button>
-          <button className={`mobile-nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { setActiveView('agent-buildings'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { navigateTo('agent-buildings'); setMobileMenuOpen(false) }}>
             <span>🏢</span> Buildings
           </button>
         </nav>
       )}
       {authUser?.role === 'SuperAdmin' && (
         <nav className="mobile-bottom-nav">
-          <button className={`mobile-nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { navigateTo('agent-dashboard'); setMobileMenuOpen(false) }}>
             <span>◈</span> Dashboard
           </button>
-          <button className={`mobile-nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { navigateTo('agent-homes'); setMobileMenuOpen(false) }}>
             <span>⌂</span> Homes
           </button>
-          <button className={`mobile-nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}>
+          <button className={`mobile-nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { navigateTo('agent-applications'); setMobileMenuOpen(false) }}>
             <span>📋</span> Applications
+          </button>
+          <button className={`mobile-nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { navigateTo('agent-buildings'); setMobileMenuOpen(false) }}>
+            <span>🏢</span> Buildings
           </button>
         </nav>
       )}
