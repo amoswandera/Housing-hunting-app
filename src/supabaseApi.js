@@ -1085,6 +1085,22 @@ export const fetchMyApplications = async (token) => {
     }
   }
 
+  // Also fetch building_id directly from homes table in case the function doesn't include it
+  if (homeIds.length > 0) {
+    const { data: homesDirect } = await supabase
+      .from('homes')
+      .select('id, building_id')
+      .in('id', homeIds)
+    
+    if (homesDirect) {
+      homesDirect.forEach(h => {
+        if (homeMap[h.id]) {
+          homeMap[h.id].building_id = h.building_id
+        }
+      })
+    }
+  }
+
   // Fetch home_images for all home IDs in one query
   // This is a backup in case the function doesn't return images
   let imagesByHome = {}
@@ -1126,6 +1142,7 @@ export const fetchMyApplications = async (token) => {
       home_available: Boolean(home?.available),
       payment_deadline: app.payment_deadline || null,
       tenant_message: app.tenant_message || '', // Explicitly preserve tenant_message
+      building_id: home?.building_id || null, // Include building_id for filtering
     }
   })
 }
