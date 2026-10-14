@@ -331,6 +331,8 @@ function App() {
   const [buildingDetailImageIndex, setBuildingDetailImageIndex] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [readNotifications, setReadNotifications] = useState(new Set())
+  // Navigation history for proper back button behavior
+  const [navigationHistory, setNavigationHistory] = useState(['discover'])
   // Messaging state
   const [openMessageAppId, setOpenMessageAppId] = useState(null)
   const [messageThreads, setMessageThreads] = useState({}) // { [appId]: Message[] }
@@ -340,6 +342,24 @@ function App() {
   const [ratingModal, setRatingModal] = useState(null) // { homeId, homeName, existing }
   const [ratingStars, setRatingStars] = useState(0)
   const [ratingReview, setRatingReview] = useState('')
+
+  // Navigation helpers
+  const navigateTo = useCallback((view) => {
+    setNavigationHistory(prev => [...prev, view])
+    setActiveView(view)
+  }, [])
+
+  const navigateBack = useCallback(() => {
+    if (navigationHistory.length > 1) {
+      const newHistory = [...navigationHistory]
+      newHistory.pop() // Remove current view
+      const previousView = newHistory[newHistory.length - 1]
+      setNavigationHistory(newHistory)
+      setActiveView(previousView)
+      return true
+    }
+    return false
+  }, [navigationHistory])
 
   // Handle in-app and device back navigation
   const handleBack = useCallback(() => {
@@ -358,15 +378,16 @@ function App() {
     }
     if (showTenantProfile) {
       setShowTenantProfile(false)
-      setActiveView('discover')
+      navigateBack()
       return true
     }
+    // Use navigation history instead of hardcoding 'discover'
     if (activeView !== 'discover') {
-      setActiveView('discover')
+      navigateBack()
       return true
     }
     return false
-  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, showTenantProfile, currentImageIndex])
+  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, showTenantProfile, currentImageIndex, navigateBack])
 
   // Manage browser history so hardware back buttons on Android WebView / browsers step back instead of exiting
   useEffect(() => {
@@ -673,7 +694,7 @@ function App() {
 
   const saveTenantProfile = async (event) => {
     event.preventDefault()
-    try { const savedProfile = await updateProfile(tenantProfile, authUser.token); setTenantProfile(savedProfile); setShowTenantProfile(false); setActiveView('discover'); setAuthUser((current) => ({ ...current, ...savedProfile })); showToast('Your profile was updated.') } catch (error) { showToast(error.message) }
+    try { const savedProfile = await updateProfile(tenantProfile, authUser.token); setTenantProfile(savedProfile); setShowTenantProfile(false); navigateBack(); setAuthUser((current) => ({ ...current, ...savedProfile })); showToast('Your profile was updated.') } catch (error) { showToast(error.message) }
   }
 
   const viewAgentProfile = async (agentId) => {
@@ -835,26 +856,26 @@ function App() {
         <div className="profile-card clickable" role="button" tabIndex={0} onClick={() => { setMobileMenuOpen(false); openMyProfile() }} onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && openMyProfile()}><div className="avatar">{authUser ? authUser.initials : 'G'}</div><div><strong>{authUser ? authUser.name : 'Guest visitor'}</strong><span>{authUser ? `${authUser.role} account` : 'Browse-only access'}</span></div><span className="chevron">⌄</span></div>
         <nav className="main-nav">
           {!authUser && (
-            <button className={`nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
+            <button className={`nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => { navigateTo('discover'); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
           )}
           {authUser?.role === 'Tenant' && (
             <>
-              <button className={`nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
-              <button className={`nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>♡</span> Saved <b>{saved.length}</b></button>
-              <button className={`nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>▣</span> My bookings <b>{booked.length}</b></button>
+              <button className={`nav-item ${activeView === 'discover' && !showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('discover'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>⌂</span> Discover</button>
+              <button className={`nav-item ${activeView === 'saved' && !showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('saved'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>♡</span> Saved <b>{saved.length}</b></button>
+              <button className={`nav-item ${activeView === 'bookings' && !showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('bookings'); setShowTenantProfile(false); setMobileMenuOpen(false) }}><span>▣</span> My bookings <b>{booked.length}</b></button>
             </>
           )}
           {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && (
             <>
-              {authUser?.role === 'SuperAdmin' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
-              {authUser?.role === 'Agent' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { setActiveView('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
-              <button className={`nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { setActiveView('agent-homes'); setMobileMenuOpen(false) }}><span>⌂</span> Homes</button>
-              <button className={`nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { setActiveView('agent-applications'); setMobileMenuOpen(false) }}><span>📋</span> Applications</button>
-              <button className={`nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { setActiveView('agent-buildings'); setMobileMenuOpen(false) }}><span>🏢</span> Buildings</button>
+              {authUser?.role === 'SuperAdmin' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { navigateTo('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
+              {authUser?.role === 'Agent' && <button className={`nav-item ${activeView === 'agent-dashboard' ? 'active' : ''}`} onClick={() => { navigateTo('agent-dashboard'); setMobileMenuOpen(false) }}><span>◈</span> Dashboard</button>}
+              <button className={`nav-item ${activeView === 'agent-homes' ? 'active' : ''}`} onClick={() => { navigateTo('agent-homes'); setMobileMenuOpen(false) }}><span>⌂</span> Homes</button>
+              <button className={`nav-item ${activeView === 'agent-applications' ? 'active' : ''}`} onClick={() => { navigateTo('agent-applications'); setMobileMenuOpen(false) }}><span>📋</span> Applications</button>
+              <button className={`nav-item ${activeView === 'agent-buildings' ? 'active' : ''}`} onClick={() => { navigateTo('agent-buildings'); setMobileMenuOpen(false) }}><span>🏢</span> Buildings</button>
             </>
           )}
-          {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' || showTenantProfile ? 'active' : ''}`} onClick={() => { setActiveView('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
-          {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && <button className={`nav-item ${activeView === 'agent-profile' ? 'active' : ''}`} onClick={() => { setActiveView('agent-profile'); setAgentProfileNonce((n) => n + 1); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
+          {authUser?.role === 'Tenant' && <button className={`nav-item ${activeView === 'profile' || showTenantProfile ? 'active' : ''}`} onClick={() => { navigateTo('profile'); setShowTenantProfile(true); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
+          {(authUser?.role === 'Agent' || authUser?.role === 'SuperAdmin') && <button className={`nav-item ${activeView === 'agent-profile' ? 'active' : ''}`} onClick={() => { navigateTo('agent-profile'); setAgentProfileNonce((n) => n + 1); setMobileMenuOpen(false) }}><span>♙</span> My profile</button>}
         </nav>
         <div className="sidebar-bottom"><div className="help-icon">?</div><div><strong>Need a hand?</strong><span>Our team is here to help.</span></div><button aria-label="Open help">→</button></div>
       </aside>
@@ -924,7 +945,7 @@ function App() {
             {authUser ? (
               <>
                 <div className="mini-avatar">{authUser.initials}</div>
-                <button className="logout-button" onClick={() => { setAuthUser(null); setRole('Tenant'); localStorage.removeItem('activeView'); setActiveView('discover') }}>Log out</button>
+                <button className="logout-button" onClick={() => { setAuthUser(null); setRole('Tenant'); localStorage.removeItem('activeView'); setNavigationHistory(['discover']); setActiveView('discover') }}>Log out</button>
               </>
             ) : (
               <button className="login-link" onClick={() => setShowAuthScreen(true)}>Sign in</button>
@@ -937,8 +958,8 @@ function App() {
             <form className="listing-form profile-form tenant-profile" onSubmit={saveTenantProfile}>
               <div className="form-header-bar">
                 <h2>My tenant profile</h2>
-                <button type="button" className="in-app-back-button" onClick={() => { setShowTenantProfile(false); setActiveView('discover') }}>
-                  ← Back to Discover
+                <button type="button" className="in-app-back-button" onClick={() => { setShowTenantProfile(false); navigateBack() }}>
+                  ← Back
                 </button>
               </div>
               <p className="form-help">These details are shared with an agent when you apply for a home.</p>
@@ -970,7 +991,7 @@ function App() {
           )}
           </>}
           {activeView === 'saved' && !showTenantProfile && <>
-          <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
+          <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => navigateBack()}>← Back</button></div>
           <div className="content-heading"><div><h2>Saved homes</h2><p>{savedHomes.length} home{savedHomes.length === 1 ? '' : 's'} saved</p></div></div>
           <div className="users-toolbar" style={{ margin: '0 0 20px' }}>
             <div className="search-field admin-user-search"><span>⌕</span><input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} placeholder="Search saved homes" /></div>
@@ -980,7 +1001,7 @@ function App() {
           {savedHomes.length > 0 ? <section className="home-grid">{savedHomes.map(renderHomeCard)}</section> : <div className="empty-state"><strong>{saved.length > 0 ? 'No saved homes match your filter' : 'No saved homes yet'}</strong><span>{saved.length > 0 ? 'Try clearing the search or filters.' : 'Tap the heart on any home to save it here.'}</span></div>}
           </>}
           {activeView === 'bookings' && !showTenantProfile && <>
-          <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => setActiveView('discover')}>← Back to Discover</button></div>
+          <div className="subpage-back-bar"><button className="in-app-back-button" onClick={() => navigateBack()}>← Back</button></div>
           <div className="content-heading"><div><h2>My bookings</h2><p>Applications are reviewed by each house agent.</p></div></div>
           <div className="table-panel" style={{ marginTop: '0' }}>
             <div className="users-toolbar" style={{ marginBottom: '16px' }}>
@@ -1202,7 +1223,7 @@ function App() {
 
         {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} />}
 
-        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onBackToDashboard={() => navigateBack()} />}
+        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} navigateBack={navigateBack} />}
       </main>
 
       {!authUser && (
@@ -1957,7 +1978,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
   )
 }
 
-function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToDashboard }) {
+function SuperAdminPanel({ token, currentUserId, onNotify, activeView, navigateBack }) {
   const [overview, setOverview] = useState(null)
   const [users, setUsers] = useState([])
   const [homes, setHomes] = useState([])
@@ -2190,7 +2211,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ margin: 0 }}>{selectedView.charAt(0).toUpperCase() + selectedView.slice(1)}</h2>
-            <button onClick={() => { setSelectedView(null); onBackToDashboard?.() }} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back to overview</button>
+            <button onClick={() => { setSelectedView(null); navigateBack() }} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back</button>
           </div>
 
           {selectedView === 'users' && (
@@ -2933,7 +2954,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onBackToD
         }} style={{ maxWidth: '600px', margin: '0 auto' }}>
           <div className="form-header-bar">
             <h2>My profile</h2>
-            <button type="button" className="in-app-back-button" onClick={() => { setShowProfile(false); onBackToDashboard?.() }}>← Back to overview</button>
+            <button type="button" className="in-app-back-button" onClick={() => { setShowProfile(false); navigateBack() }}>← Back</button>
           </div>
           <p className="form-help">These details are visible to other users.</p>
           <div className="form-grid">
