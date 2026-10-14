@@ -345,7 +345,6 @@ function App() {
   const [selectedApplicationDetail, setSelectedApplicationDetail] = useState(null) // For viewing application details including tenant_message
   const [expandedDiscoverCard, setExpandedDiscoverCard] = useState(null) // 'homes' or 'buildings' or null
   const [expandedBookingsCard, setExpandedBookingsCard] = useState(null) // 'homes' or 'buildings' or null
-  const [approvedUnitIds, setApprovedUnitIds] = useState([]) // IDs of approved building units for current tenant
 
   // Navigation helpers
   const navigateTo = useCallback((view) => {
@@ -457,10 +456,6 @@ function App() {
       const approvedHomeIds = items
         .filter(a => a.status === 'approved' && a.home_id && !a.building_id)
         .map(a => a.home_id)
-      const approvedUnitIds = items
-        .filter(a => a.status === 'approved' && a.home_id && a.building_id)
-        .map(a => a.home_id)
-      setApprovedUnitIds(approvedUnitIds)
       fetchHomes({}, false, approvedHomeIds).then(setHomes).catch(() => {})
     }).catch(() => {})
   }, [authUser])
@@ -632,9 +627,6 @@ function App() {
       const units = await fetchUnitsInBuilding(building.id, {
         category: unitFilterCategory,
         floor: unitFilterFloor
-      }, {
-        isTenantView: authUser?.role === 'Tenant',
-        approvedHomeIds: approvedUnitIds
       })
       setBuildingUnits(units)
       setSelectedBuilding(building)

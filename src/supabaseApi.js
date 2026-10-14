@@ -2358,17 +2358,11 @@ export const fetchBuildingCategoryImages = async (buildingId) => {
   return grouped
 }
 
-export const fetchUnitsInBuilding = async (buildingId, filters = {}, options = {}) => {
+export const fetchUnitsInBuilding = async (buildingId, filters = {}) => {
   let query = supabase
     .from('homes')
     .select('*')
     .eq('building_id', buildingId)
-
-  // For tenant view, only show available units unless it's the tenant's approved unit
-  if (options.isTenantView && options.approvedHomeIds) {
-    // This needs to be handled with a more complex query or post-filtering
-    // For now, fetch all and filter on the client side
-  }
 
   if (filters.category && filters.category !== 'All') {
     query = query.eq('category', filters.category)
@@ -2382,16 +2376,8 @@ export const fetchUnitsInBuilding = async (buildingId, filters = {}, options = {
 
   handleSupabaseError(error)
 
-  // Filter for tenant view: only show available units + tenant's approved units
-  let filteredData = data || []
-  if (options.isTenantView && options.approvedHomeIds) {
-    filteredData = filteredData.filter(unit => 
-      unit.available || options.approvedHomeIds.includes(unit.id)
-    )
-  }
-
   // Get all unit IDs
-  const unitIds = filteredData.map(u => u.id)
+  const unitIds = (data || []).map(u => u.id)
 
   // Fetch unit-specific images from home_images
   let unitImagesByUnit = {}
