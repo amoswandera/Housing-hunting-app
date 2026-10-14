@@ -3,6 +3,10 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.habitat.househunting"
     compileSdk = rootProject.ext.compileSdkVersion
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "com.habitat.househunting"
         minSdkVersion rootProject.ext.minSdkVersion
