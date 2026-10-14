@@ -720,7 +720,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
         <div className="app-detail-page">
           <div className="app-detail-header">
             <h2>Application Detail</h2>
-            <button type="button" className="in-app-back-button" onClick={closeApplicationDetail}>← Back to applications</button>
+            <button type="button" className="in-app-back-button" onClick={() => { closeApplicationDetail(); navigateBack() }}>← Back</button>
           </div>
 
           <div className="app-detail-grid">
