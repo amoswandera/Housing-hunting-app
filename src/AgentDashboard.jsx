@@ -54,6 +54,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
   const [buildingSearch, setBuildingSearch] = useState('')
   const [buildingRegionFilter, setBuildingRegionFilter] = useState('All regions')
+  const [buildingLocationFilter, setBuildingLocationFilter] = useState('')
   const [unitCategoryFilter, setUnitCategoryFilter] = useState('All categories')
   const [unitFloorFilter, setUnitFloorFilter] = useState('All floors')
   const [unitPriceFilter, setUnitPriceFilter] = useState('')
@@ -181,14 +182,19 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
   useEffect(() => {
     if (view === 'profile') {
       setInternalView('profile')
+      setShowProfile(true)
     } else if (view === 'dashboard') {
       setInternalView('dashboard')
+      setShowProfile(false)
     } else if (view === 'homes') {
       setInternalView('homes')
+      setShowProfile(false)
     } else if (view === 'applications') {
       setInternalView('applications')
+      setShowProfile(false)
     } else if (view === 'buildings') {
       setInternalView('buildings')
+      setShowProfile(false)
     }
   }, [view])
 
@@ -1946,6 +1952,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   <div className="users-toolbar" style={{ marginBottom: '16px' }}>
                     <div className="search-field admin-user-search"><span>⌕</span><input value={buildingSearch} onChange={e => setBuildingSearch(e.target.value)} placeholder="Search buildings" /></div>
                     <select className="role-filter" value={buildingRegionFilter} onChange={e => setBuildingRegionFilter(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                    <div className="search-field admin-user-search"><span>📍</span><input value={buildingLocationFilter} onChange={e => setBuildingLocationFilter(e.target.value)} placeholder="Filter by location" /></div>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -1959,7 +1966,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {buildings.filter(b => b.available_units > 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).map((building) => {
+                      {buildings.filter(b => b.available_units > 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase())) && (buildingLocationFilter === '' || b.location.toLowerCase().includes(buildingLocationFilter.toLowerCase()))).map((building) => {
                         const primaryImage = building.images && building.images.length > 0
                           ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
                           : ''
@@ -2015,7 +2022,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       })}
                     </tbody>
                   </table>
-                  {buildings.filter(b => b.available_units > 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).length === 0 && (
+                  {buildings.filter(b => b.available_units > 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase())) && (buildingLocationFilter === '' || b.location.toLowerCase().includes(buildingLocationFilter.toLowerCase()))).length === 0 && (
                     <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
                       <p style={{ fontSize: '16px', marginBottom: '8px' }}>No buildings with available units</p>
                       <p style={{ fontSize: '14px' }}>All units in your buildings are currently occupied</p>
@@ -2033,6 +2040,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                   <div className="users-toolbar" style={{ marginBottom: '16px' }}>
                     <div className="search-field admin-user-search"><span>⌕</span><input value={buildingSearch} onChange={e => setBuildingSearch(e.target.value)} placeholder="Search buildings" /></div>
                     <select className="role-filter" value={buildingRegionFilter} onChange={e => setBuildingRegionFilter(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                    <div className="search-field admin-user-search"><span>📍</span><input value={buildingLocationFilter} onChange={e => setBuildingLocationFilter(e.target.value)} placeholder="Filter by location" /></div>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -2046,7 +2054,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {buildings.filter(b => b.available_units === 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).map((building) => {
+                      {buildings.filter(b => b.available_units === 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase())) && (buildingLocationFilter === '' || b.location.toLowerCase().includes(buildingLocationFilter.toLowerCase()))).map((building) => {
                         const primaryImage = building.images && building.images.length > 0
                           ? (building.images.find(i => i.is_primary)?.url || building.images[0].url)
                           : ''
@@ -2096,7 +2104,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                       })}
                     </tbody>
                   </table>
-                  {buildings.filter(b => b.available_units === 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase()))).length === 0 && (
+                  {buildings.filter(b => b.available_units === 0 && (buildingRegionFilter === 'All regions' || b.region === buildingRegionFilter) && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase())) && (buildingLocationFilter === '' || b.location.toLowerCase().includes(buildingLocationFilter.toLowerCase()))).length === 0 && (
                     <div style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
                       <p style={{ fontSize: '16px', marginBottom: '8px' }}>No full buildings</p>
                       <p style={{ fontSize: '14px' }}>All your buildings have at least one available unit</p>

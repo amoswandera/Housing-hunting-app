@@ -345,6 +345,7 @@ function App() {
   const [selectedApplicationDetail, setSelectedApplicationDetail] = useState(null) // For viewing application details including tenant_message
   const [expandedDiscoverCard, setExpandedDiscoverCard] = useState(null) // 'homes' or 'buildings' or null
   const [expandedBookingsCard, setExpandedBookingsCard] = useState(null) // 'homes' or 'buildings' or null
+  const [approvedUnitIds, setApprovedUnitIds] = useState([]) // IDs of approved building units for current tenant
 
   // Navigation helpers
   const navigateTo = useCallback((view) => {
@@ -456,6 +457,10 @@ function App() {
       const approvedHomeIds = items
         .filter(a => a.status === 'approved' && a.home_id && !a.building_id)
         .map(a => a.home_id)
+      const approvedUnitIds = items
+        .filter(a => a.status === 'approved' && a.home_id && a.building_id)
+        .map(a => a.home_id)
+      setApprovedUnitIds(approvedUnitIds)
       fetchHomes({}, false, approvedHomeIds).then(setHomes).catch(() => {})
     }).catch(() => {})
   }, [authUser])
@@ -551,6 +556,17 @@ function App() {
     }))
   }, [homes])
 
+  // Filter buildings by query and region
+  const filteredBuildings = useMemo(() => {
+    return buildingsWithUnits.filter(building => {
+      const queryMatch = query === '' || 
+        building.name.toLowerCase().includes(query.toLowerCase()) ||
+        building.location.toLowerCase().includes(query.toLowerCase())
+      const regionMatch = region === 'All regions' || building.region === region
+      return queryMatch && regionMatch
+    })
+  }, [buildingsWithUnits, query, region])
+
   // Standalone homes (not part of any building)
   const standaloneHomes = useMemo(() => {
     return homes.filter(home => !home.building_id)
@@ -616,6 +632,9 @@ function App() {
       const units = await fetchUnitsInBuilding(building.id, {
         category: unitFilterCategory,
         floor: unitFilterFloor
+      }, {
+        isTenantView: authUser?.role === 'Tenant',
+        approvedHomeIds: approvedUnitIds
       })
       setBuildingUnits(units)
       setSelectedBuilding(building)
@@ -1027,7 +1046,7 @@ function App() {
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏢</div>
               <h3 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 600 }}>Apartments</h3>
               <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: '14px' }}>Units in apartment buildings</p>
-              <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{buildingsWithUnits.length}</div>
+              <div style={{ fontSize: '32px', fontWeight: 700, color: '#1d3d33' }}>{filteredBuildings.length}</div>
               <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: '12px' }}>Available buildings</p>
             </div>
           </div>
@@ -1060,9 +1079,9 @@ function App() {
                 <div className="search-field admin-user-search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search apartments" /></div>
                 <select className="role-filter" value={region} onChange={e => setRegion(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
               </div>
-              {buildingsWithUnits.length > 0 ? (
+              {filteredBuildings.length > 0 ? (
                 <section className="home-grid">
-                  {buildingsWithUnits.map(renderBuildingCard)}
+                  {filteredBuildings.map(renderBuildingCard)}
                 </section>
               ) : (
                 <div className="empty-state"><strong>No apartments found</strong><span>Try a different neighbourhood or region.</span></div>
