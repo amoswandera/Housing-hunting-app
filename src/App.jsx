@@ -1235,7 +1235,7 @@ function App() {
 
         {authUser && role === 'Agent' && <AgentDashboard token={authUser.token} onNotify={showToast} openProfileNonce={agentProfileNonce} view={activeView === 'agent-homes' ? 'homes' : activeView === 'agent-applications' ? 'applications' : activeView === 'agent-buildings' ? 'buildings' : activeView === 'agent-dashboard' ? 'dashboard' : 'profile'} />}
 
-        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} onNavigateBack={handleNavigateBack} />}
+        {authUser && role === 'SuperAdmin' && <SuperAdminPanel token={authUser.token} currentUserId={authUser.id} onNotify={showToast} activeView={activeView} />}
       </main>
 
       {!authUser && (
@@ -2027,7 +2027,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
   )
 }
 
-function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onNavigateBack }) {
+function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
   const [overview, setOverview] = useState(null)
   const [users, setUsers] = useState([])
   const [homes, setHomes] = useState([])
@@ -2260,7 +2260,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onNavigat
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ margin: 0 }}>{selectedView.charAt(0).toUpperCase() + selectedView.slice(1)}</h2>
-            <button onClick={() => { setSelectedView(null); handleNavigateBack() }} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back</button>
+            <button onClick={() => { setSelectedView(null); onNavigateBack() }} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Back</button>
           </div>
 
           {selectedView === 'users' && (
@@ -3003,7 +3003,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView, onNavigat
         }} style={{ maxWidth: '600px', margin: '0 auto' }}>
           <div className="form-header-bar">
             <h2>My profile</h2>
-            <button type="button" className="in-app-back-button" onClick={() => { setShowProfile(false); handleNavigateBack() }}>← Back</button>
+            <button type="button" className="in-app-back-button" onClick={() => { setShowProfile(false); onNavigateBack() }}>← Back</button>
           </div>
           <p className="form-help">These details are visible to other users.</p>
           <div className="form-grid">
