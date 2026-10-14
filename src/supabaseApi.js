@@ -1774,6 +1774,7 @@ export const fetchSuperAdminApplications = async (token) => {
 
     return {
       ...app,
+      tenant_message: app.tenant_message || '', // Explicitly preserve tenant_message
       homes: {
         ...home,
         name: displayName,
