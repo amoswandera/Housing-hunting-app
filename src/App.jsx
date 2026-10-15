@@ -350,6 +350,8 @@ function App() {
   const [ratingStars, setRatingStars] = useState(0)
   const [ratingReview, setRatingReview] = useState('')
   const [selectedApplicationDetail, setSelectedApplicationDetail] = useState(null) // For viewing application details including tenant_message
+  const [showTenantApplicationDetailPage, setShowTenantApplicationDetailPage] = useState(false) // For full-page application detail view
+  const [tenantDetailImageIndex, setTenantDetailImageIndex] = useState(0) // For image gallery in tenant detail page
   const [expandedDiscoverCard, setExpandedDiscoverCard] = useState(null) // 'homes' or 'buildings' or null
   const [expandedBookingsCard, setExpandedBookingsCard] = useState(null) // 'homes' or 'buildings' or null
 
@@ -382,6 +384,12 @@ function App() {
       setPaymentApplication(null)
       return true
     }
+    if (showTenantApplicationDetailPage) {
+      setShowTenantApplicationDetailPage(false)
+      setSelectedApplicationDetail(null)
+      setTenantDetailImageIndex(0)
+      return true
+    }
     if (selectedApplicationDetail) {
       setSelectedApplicationDetail(null)
       return true
@@ -401,7 +409,7 @@ function App() {
       return true
     }
     return false
-  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, selectedApplicationDetail, showTenantProfile, currentImageIndex, navigateBack])
+  }, [activeView, mobileMenuOpen, paymentApplication, selectedHome, selectedApplicationDetail, showTenantProfile, showTenantApplicationDetailPage, currentImageIndex, navigateBack])
 
   // Manage browser history so hardware back buttons on Android WebView / browsers step back instead of exiting
   useEffect(() => {
@@ -413,10 +421,10 @@ function App() {
   }, [handleBack])
 
   useEffect(() => {
-    if (selectedHome || paymentApplication || selectedApplicationDetail || showTenantProfile || activeView !== 'discover' || mobileMenuOpen) {
+    if (selectedHome || paymentApplication || selectedApplicationDetail || showTenantApplicationDetailPage || showTenantProfile || activeView !== 'discover' || mobileMenuOpen) {
       window.history.pushState({ inAppView: true }, '')
     }
-  }, [selectedHome, paymentApplication, selectedApplicationDetail, showTenantProfile, activeView, mobileMenuOpen])
+  }, [selectedHome, paymentApplication, selectedApplicationDetail, showTenantApplicationDetailPage, showTenantProfile, activeView, mobileMenuOpen])
 
   // Capacitor native hardware back button listener
   useEffect(() => {
@@ -1292,7 +1300,7 @@ function App() {
                               )}
                               {/* View details button - shows tenant message */}
                               <button style={{ border: 0, background: 'none', color: '#6b7280', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                                onClick={() => setSelectedApplicationDetail(application)}>
+                                onClick={() => { setSelectedApplicationDetail(application); setShowTenantApplicationDetailPage(true); setTenantDetailImageIndex(0); }}>
                                 View details
                               </button>
                             </div>
@@ -1340,6 +1348,10 @@ function App() {
                     <thead>
                       <tr>
                         <th>Apartment</th>
+                        <th>Category</th>
+                        <th>Floor</th>
+                        <th>Region</th>
+                        <th>Deposit</th>
                         <th>Status</th>
                         <th>Agent</th>
                         <th>Actions</th>
@@ -1376,10 +1388,15 @@ function App() {
                               )}
                               <div>
                                 <strong>{application.name || 'Apartment no longer listed'}</strong>
+                                {application.building_name && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.building_name}</span>}
                                 {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
                               </div>
                             </div>
                           </td>
+                          <td><span style={{ fontSize: '11px', color: '#2d443b' }}>{application.category || '—'}</span></td>
+                          <td><span style={{ fontSize: '11px', color: '#2d443b' }}>{application.floor || '—'}</span></td>
+                          <td><span style={{ fontSize: '11px', color: '#2d443b' }}>{application.region || '—'}</span></td>
+                          <td><span style={{ fontSize: '11px', color: '#2d443b', fontWeight: 600 }}>{formatKes(application.deposit)}</span></td>
                           <td><span className={`application-status ${application.status}`}>{application.status}</span></td>
                           <td>
                             {application.agent_phone ? (
@@ -1445,7 +1462,7 @@ function App() {
                               )}
                               {/* View details button - shows tenant message */}
                               <button style={{ border: 0, background: 'none', color: '#6b7280', fontSize: '10px', fontWeight: 700, padding: 0, cursor: 'pointer', marginTop: '4px', display: 'block' }}
-                                onClick={() => setSelectedApplicationDetail(application)}>
+                                onClick={() => { setSelectedApplicationDetail(application); setShowTenantApplicationDetailPage(true); setTenantDetailImageIndex(0); }}>
                                 View details
                               </button>
                             </div>
@@ -2009,7 +2026,7 @@ function App() {
       )}
 
       {/* Application Detail Modal - shows tenant message */}
-      {selectedApplicationDetail && (
+      {selectedApplicationDetail && !showTenantApplicationDetailPage && (
         <div className="modal-backdrop" onClick={() => setSelectedApplicationDetail(null)}>
           <div className="booking-modal" onClick={(event) => event.stopPropagation()}>
             <div className="form-header-bar">
@@ -2039,6 +2056,304 @@ function App() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Full-Page Tenant Application Detail View */}
+      {showTenantApplicationDetailPage && selectedApplicationDetail && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#fff', zIndex: 2000, overflowY: 'auto' }}>
+          <div className="form-header-bar" style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 10, borderBottom: '1px solid #e5e7eb' }}>
+            <button type="button" className="in-app-back-button" onClick={() => { setShowTenantApplicationDetailPage(false); setSelectedApplicationDetail(null); setTenantDetailImageIndex(0); }}>← Back</button>
+            <button type="button" className="close-button" onClick={() => { setShowTenantApplicationDetailPage(false); setSelectedApplicationDetail(null); setTenantDetailImageIndex(0); }}>×</button>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'row', minHeight: 'calc(100vh - 60px)' }}>
+            {/* Left Side - Unit Images Gallery */}
+            <div style={{ flex: 1, background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', minWidth: '50%' }}>
+              {(() => {
+                const hasImages = selectedApplicationDetail.images && selectedApplicationDetail.images.length > 0
+                const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
+                const imageUrl = hasImages
+                  ? extractUrl(selectedApplicationDetail.images[tenantDetailImageIndex] || selectedApplicationDetail.images[0])
+                  : selectedApplicationDetail.image || ''
+
+                return (
+                  <>
+                    <img
+                      src={imageUrl || ''}
+                      alt={selectedApplicationDetail.name || 'Unit'}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '60vh',
+                        objectFit: 'contain',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                      }}
+                      onError={(e) => {
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
+                      }}
+                    />
+                    {/* Image Navigation */}
+                    {hasImages && selectedApplicationDetail.images.length > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+                        <button
+                          onClick={() => setTenantDetailImageIndex(prev => prev === 0 ? selectedApplicationDetail.images.length - 1 : prev - 1)}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#fff',
+                            border: '1px solid #d2ded5',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '18px'
+                          }}
+                        >
+                          ‹
+                        </button>
+                        <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                          {tenantDetailImageIndex + 1} / {selectedApplicationDetail.images.length}
+                        </span>
+                        <button
+                          onClick={() => setTenantDetailImageIndex(prev => (prev + 1) % selectedApplicationDetail.images.length)}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#fff',
+                            border: '1px solid #d2ded5',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '18px'
+                          }}
+                        >
+                          ›
+                        </button>
+                      </div>
+                    )}
+                    {/* Thumbnails */}
+                    {hasImages && selectedApplicationDetail.images.length > 1 && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {selectedApplicationDetail.images.map((img, index) => (
+                          <img
+                            key={index}
+                            src={extractUrl(img)}
+                            alt={`Thumbnail ${index + 1}`}
+                            style={{
+                              width: '60px',
+                              height: '60px',
+                              objectFit: 'cover',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              border: index === tenantDetailImageIndex ? '2px solid #3e735e' : '1px solid #d2ded5',
+                              opacity: index === tenantDetailImageIndex ? 1 : 0.6
+                            }}
+                            onClick={() => setTenantDetailImageIndex(index)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+
+            {/* Right Side - Application Details */}
+            <div style={{ flex: 1, padding: '32px', background: '#fff', minWidth: '50%' }}>
+              <p className="eyebrow">APPLICATION</p>
+              <h2 style={{ fontSize: '28px', marginBottom: '24px' }}>{selectedApplicationDetail.name || 'Unit'}</h2>
+              
+              {/* Status Badge */}
+              <div style={{ marginBottom: '24px' }}>
+                <span className={`application-status ${selectedApplicationDetail.status}`} style={{ fontSize: '14px', padding: '6px 12px', borderRadius: '20px' }}>
+                  {selectedApplicationDetail.status}
+                </span>
+              </div>
+
+              {/* Unit Details */}
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#1d3d33' }}>Unit Information</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                  <div>
+                    <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Location</strong>
+                    <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.location || '—'}</span>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Region</strong>
+                    <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.region || '—'}</span>
+                  </div>
+                  {selectedApplicationDetail.building_name && (
+                    <div>
+                      <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Building</strong>
+                      <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.building_name}</span>
+                    </div>
+                  )}
+                  {selectedApplicationDetail.unit_number && (
+                    <div>
+                      <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Unit Number</strong>
+                      <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.unit_number}</span>
+                    </div>
+                  )}
+                  {selectedApplicationDetail.category && (
+                    <div>
+                      <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Category</strong>
+                      <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.category}</span>
+                    </div>
+                  )}
+                  {selectedApplicationDetail.floor && (
+                    <div>
+                      <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Floor</strong>
+                      <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.floor}</span>
+                    </div>
+                  )}
+                  <div>
+                    <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Deposit</strong>
+                    <span style={{ fontSize: '14px', color: '#1d3d33', fontWeight: 600 }}>{formatKes(selectedApplicationDetail.deposit)}</span>
+                  </div>
+                  {selectedApplicationDetail.price && (
+                    <div>
+                      <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Monthly Rent</strong>
+                      <span style={{ fontSize: '14px', color: '#1d3d33', fontWeight: 600 }}>{formatKes(selectedApplicationDetail.price)}</span>
+                    </div>
+                  )}
+                  <div>
+                    <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Applied On</strong>
+                    <span style={{ fontSize: '14px', color: '#1d3d33' }}>{new Date(selectedApplicationDetail.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tenant Message */}
+              {selectedApplicationDetail.tenant_message && (
+                <div style={{ marginBottom: '24px', background: '#f6f9f5', padding: '16px', borderRadius: '8px' }}>
+                  <strong style={{ fontSize: '12px', color: '#3e735e', display: 'block', marginBottom: '8px' }}>Your Message</strong>
+                  <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: '#1d3d33' }}>{selectedApplicationDetail.tenant_message}</p>
+                </div>
+              )}
+
+              {/* Unit Description */}
+              {selectedApplicationDetail.details && (
+                <div style={{ marginBottom: '24px' }}>
+                  <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#1d3d33' }}>Description</h3>
+                  <p style={{ fontSize: '14px', lineHeight: 1.6, color: '#6b7280' }}>{selectedApplicationDetail.details}</p>
+                </div>
+              )}
+
+              {/* Agent Information */}
+              <div style={{ marginBottom: '24px', padding: '16px', background: '#f9fafb', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#1d3d33' }}>Agent Information</h3>
+                <div style={{ marginBottom: '8px' }}>
+                  <strong style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.agent_name || 'House Agent'}</strong>
+                </div>
+                {selectedApplicationDetail.agent_company && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>{selectedApplicationDetail.agent_company}</span>
+                  </div>
+                )}
+                {selectedApplicationDetail.agent_phone && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <a href={`tel:${cleanPhoneNumber(selectedApplicationDetail.agent_phone)}`} className="contact-btn call-btn" style={{ padding: '8px 16px' }}>
+                      <span>📞</span> Call
+                    </a>
+                    <a href={getWhatsAppUrl(selectedApplicationDetail.agent_phone, selectedApplicationDetail.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn" style={{ padding: '8px 16px' }}>
+                      <span>💬</span> WhatsApp
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions for Approved Applications */}
+              {selectedApplicationDetail.status === 'approved' && (
+                <div style={{ marginBottom: '24px' }}>
+                  {selectedApplicationDetail.contract_pdf_url
+                    ? <a href={selectedApplicationDetail.contract_pdf_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', padding: '12px 24px', background: '#3e735e', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>View Contract ↗</a>
+                    : <span style={{ fontSize: '13px', color: '#9ca3af' }}>Contract pending</span>}
+                  {selectedApplicationDetail.payment_deadline && selectedApplicationDetail.payment_status !== 'paid' && (
+                    <div style={{ marginTop: '12px' }}>
+                      <span style={{ fontSize: '13px', color: new Date(selectedApplicationDetail.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
+                        {new Date(selectedApplicationDetail.payment_deadline) < new Date()
+                          ? '⚠ Payment deadline passed'
+                          : `⏰ Pay by ${new Date(selectedApplicationDetail.payment_deadline).toLocaleString()}`}
+                      </span>
+                    </div>
+                  )}
+                  {selectedApplicationDetail.payment_status !== 'paid' && (
+                    <button style={{ marginTop: '12px', padding: '12px 24px', background: '#d9775d', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => { setPaymentApplication(selectedApplicationDetail); setPaymentPhone(authUser.phone || ''); setPaymentAmount(selectedApplicationDetail.deposit) }}>
+                      Make Payment
+                    </button>
+                  )}
+                  {selectedApplicationDetail.payment_status === 'paid' && (
+                    <div style={{ marginTop: '12px', padding: '12px', background: '#d1fae5', borderRadius: '6px', color: '#065f46', fontSize: '14px', fontWeight: 600 }}>
+                      ✓ Deposit Paid
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Cancel for Submitted Applications */}
+              {selectedApplicationDetail.status === 'submitted' && (
+                <button style={{ padding: '12px 24px', background: '#c97861', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => cancelBooking(selectedApplicationDetail.home_id)}>
+                Cancel Application
+              </button>
+              )}
+
+              {/* Rate for Paid Approved Applications */}
+              {selectedApplicationDetail.status === 'approved' && selectedApplicationDetail.payment_status === 'paid' && (
+                <button style={{ marginTop: '12px', padding: '12px 24px', background: '#d59a54', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => openRatingModal(selectedApplicationDetail)}>
+                ★ Rate This Unit
+              </button>
+              )}
+            </div>
+          </div>
+
+          {/* Messages Section */}
+          {['submitted', 'approved'].includes(selectedApplicationDetail.status) && (
+            <div style={{ padding: '32px', borderTop: '1px solid #e5e7eb', background: '#f9fafb' }}>
+              <h3 style={{ fontSize: '16px', marginBottom: '16px', color: '#1d3d33' }}>Messages</h3>
+              {openMessageAppId === selectedApplicationDetail.id ? (
+                <>
+                  <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', background: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                    {(messageThreads[selectedApplicationDetail.id] || []).length === 0 ? (
+                      <p style={{ color: '#9ca3af', fontSize: '13px', textAlign: 'center', margin: '20px 0' }}>No messages yet. Start a conversation with the agent.</p>
+                    ) : (
+                      (messageThreads[selectedApplicationDetail.id] || []).map((msg, idx) => (
+                        <div key={idx} style={{ marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', background: msg.sender_id === authUser?.id ? '#3e735e' : '#f3f4f6', color: msg.sender_id === authUser?.id ? '#fff' : '#1d3d33', maxWidth: '80%', marginLeft: msg.sender_id === authUser?.id ? 'auto' : '0' }}>
+                          <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.4 }}>{msg.message}</p>
+                          <span style={{ fontSize: '10px', opacity: 0.7, marginTop: '4px', display: 'block' }}>{new Date(msg.created_at).toLocaleString()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={newMessageText}
+                      onChange={(e) => setNewMessageText(e.target.value)}
+                      placeholder="Type your message..."
+                      style={{ flex: 1, padding: '12px', border: '1px solid #d2ded5', borderRadius: '6px', fontSize: '14px' }}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(selectedApplicationDetail.id)}
+                    />
+                    <button
+                      onClick={() => handleSendMessage(selectedApplicationDetail.id)}
+                      disabled={messageSending || !newMessageText.trim()}
+                      style={{ padding: '12px 24px', background: '#3e735e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: messageSending || !newMessageText.trim() ? 'not-allowed' : 'pointer', opacity: messageSending || !newMessageText.trim() ? 0.6 : 1 }}
+                    >
+                      {messageSending ? 'Sending...' : 'Send'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setOpenMessageAppId(selectedApplicationDetail.id)
+                    await loadMessages(selectedApplicationDetail.id)
+                  }}
+                  style={{ padding: '12px 24px', background: '#3e735e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  💬 Open Messages
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -1138,12 +1138,21 @@ export const fetchMyApplications = async (token) => {
       agent_company: home?.agent_company || '',
       name: home?.name || '',
       location: home?.location || '',
+      region: home?.region || '',
       deposit: home?.deposit || 0,
       image: resolvedImage,
+      images: imgs || [], // Include all images
       home_available: Boolean(home?.available),
       payment_deadline: app.payment_deadline || null,
       tenant_message: app.tenant_message || '', // Explicitly preserve tenant_message
       building_id: home?.building_id || null, // Include building_id for filtering
+      unit_number: home?.unit_number || '',
+      category: home?.category || '',
+      floor: home?.floor || '',
+      type: home?.type || '',
+      building_name: home?.building_name || '',
+      details: home?.details || '',
+      price: home?.price || 0,
     }
   })
 }
