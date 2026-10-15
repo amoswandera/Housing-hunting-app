@@ -1388,7 +1388,6 @@ function App() {
                               )}
                               <div>
                                 <strong>{application.name || 'Apartment no longer listed'}</strong>
-                                {application.building_name && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.building_name}</span>}
                                 {application.location && <span style={{ display: 'block', fontSize: '10px', color: '#7f9585', marginTop: '2px' }}>{application.location}</span>}
                               </div>
                             </div>

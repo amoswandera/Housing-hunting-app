@@ -1073,6 +1073,7 @@ export const fetchMyApplications = async (token) => {
   // Fetch home details via SECURITY DEFINER function — bypasses available=true RLS
   // The function now includes the primary image from home_images table
   let homeMap = {}
+  let homesDirect = []
   if (Array.isArray(homeIds) && homeIds.length > 0) {
     const { data: homeRows, error: fnError } = await supabase
       .rpc('get_tenant_home_details', { p_home_ids: homeIds })
@@ -1086,18 +1087,44 @@ export const fetchMyApplications = async (token) => {
     }
   }
 
-  // Also fetch building_id directly from homes table in case the function doesn't include it
+  // Also fetch building_id and other fields directly from homes table in case the function doesn't include them
   if (Array.isArray(homeIds) && homeIds.length > 0) {
-    const { data: homesDirect } = await supabase
+    const result = await supabase
       .from('homes')
-      .select('id, building_id')
+      .select('id, building_id, unit_number, category, floor, type, details, price, region, location, name')
       .in('id', homeIds)
     
+    homesDirect = result.data || []
     if (Array.isArray(homesDirect)) {
       homesDirect.forEach(h => {
         if (homeMap[h.id]) {
           homeMap[h.id].building_id = h.building_id
+          homeMap[h.id].unit_number = h.unit_number
+          homeMap[h.id].category = h.category
+          homeMap[h.id].floor = h.floor
+          homeMap[h.id].type = h.type
+          homeMap[h.id].details = h.details
+          homeMap[h.id].price = h.price
+          homeMap[h.id].region = h.region
+          homeMap[h.id].location = h.location
+          homeMap[h.id].name = h.name
         }
+      })
+    }
+  }
+
+  // Fetch building names for building units
+  const buildingIds = [...new Set(homesDirect.filter(h => h.building_id).map(h => h.building_id))]
+  let buildingMap = {}
+  if (Array.isArray(buildingIds) && buildingIds.length > 0) {
+    const { data: buildings } = await supabase
+      .from('buildings')
+      .select('id, name')
+      .in('id', buildingIds)
+    
+    if (Array.isArray(buildings)) {
+      buildings.forEach(b => {
+        buildingMap[b.id] = b.name
       })
     }
   }
@@ -1130,13 +1157,18 @@ export const fetchMyApplications = async (token) => {
     const primaryImg = imgs?.find(i => i.is_primary) || imgs?.[0]
     const resolvedImage = home?.image || primaryImg?.url || ''
 
+    // For building units, use "Building Name - Unit Number" format
+    const displayName = home?.building_id && buildingMap[home.building_id] && home.unit_number
+      ? `${buildingMap[home.building_id]} - ${home.unit_number}`
+      : home?.name || ''
+
     return {
       ...app,
       agent_name: home?.agent_name || '',
       agent_phone: home?.agent_phone || '',
       agent_bio: home?.agent_bio || '',
       agent_company: home?.agent_company || '',
-      name: home?.name || '',
+      name: displayName,
       location: home?.location || '',
       region: home?.region || '',
       deposit: home?.deposit || 0,
@@ -1150,7 +1182,7 @@ export const fetchMyApplications = async (token) => {
       category: home?.category || '',
       floor: home?.floor || '',
       type: home?.type || '',
-      building_name: home?.building_name || '',
+      building_name: buildingMap[home?.building_id] || '',
       details: home?.details || '',
       price: home?.price || 0,
     }
