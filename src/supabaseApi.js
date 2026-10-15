@@ -856,6 +856,11 @@ export const updateHomeAvailability = async (id, available, token) => {
 
   handleSupabaseError(error)
 
+  // Update building's available_units count if this is a building unit
+  if (data?.building_id) {
+    await updateBuildingAvailableUnits(data.building_id)
+  }
+
   return {
     ...data,
     parking: Boolean(data.parking),
@@ -1387,6 +1392,12 @@ export const reviewApplication = async (id, review, token) => {
       .from('homes')
       .update({ available: false })
       .eq('id', data.home_id)
+
+    // Update building's available_units count if this is a building unit
+    const { data: home } = await supabase.from('homes').select('building_id').eq('id', data.home_id).single()
+    if (home?.building_id) {
+      await updateBuildingAvailableUnits(home.building_id)
+    }
 
     // Fetch all other submitted applications for this home (to notify them)
     const { data: others } = await supabase
@@ -1999,6 +2010,12 @@ export const returnHomeToAvailable = async (applicationId, homeId, token) => {
     .eq('id', homeId)
   handleSupabaseError(homeError)
 
+  // Update building's available_units count if this is a building unit
+  const { data: home } = await supabase.from('homes').select('building_id').eq('id', homeId).single()
+  if (home?.building_id) {
+    await updateBuildingAvailableUnits(home.building_id)
+  }
+
   return { ok: true }
 }
 
@@ -2114,6 +2131,28 @@ export const fetchMyRating = async (homeId, token) => {
 }
 
 // ─── Building Management ───────────────────────────────────────────────────────
+
+// Helper function to update building's available_units count based on actual available units
+const updateBuildingAvailableUnits = async (buildingId) => {
+  try {
+    // Count actual available units in the building
+    const { data: units } = await supabase
+      .from('homes')
+      .select('id')
+      .eq('building_id', buildingId)
+      .eq('available', true)
+
+    const availableCount = (units || []).length
+
+    // Update the building's available_units count
+    await supabase
+      .from('buildings')
+      .update({ available_units: availableCount })
+      .eq('id', buildingId)
+  } catch (error) {
+    console.error('Error updating building available units:', error)
+  }
+}
 
 export const createBuilding = async (buildingData, buildingImages, categoryTemplates, token) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
