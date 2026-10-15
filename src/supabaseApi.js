@@ -10,7 +10,7 @@ const handleSupabaseError = (error) => {
 // Helper to get initials from name
 const getInitials = (name) => {
   if (!name) return 'G'
-  return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+  return String(name).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
 }
 
 // Helper to normalize phone/email identifier
@@ -30,7 +30,7 @@ export const registerUser = async (account) => {
     password,
     options: {
       data: {
-        name: name.trim(),
+        name: name && name.trim() ? name.trim() : 'User',
         identifier: normalizedIdentifier,
         role: role || 'Tenant',
       },
@@ -102,7 +102,7 @@ export const loginUser = async (credentials) => {
       .insert({
         id: authResult.data.user.id,
         name: authResult.data.user.user_metadata?.name || 'User',
-        identifier: authResult.data.user.email || authResult.data.user.phone,
+        identifier: authResult.data.user.email || authResult.data.user.phone || 'unknown',
         role: authResult.data.user.user_metadata?.role || 'Tenant',
       })
       .select()
@@ -113,7 +113,7 @@ export const loginUser = async (credentials) => {
       profile = {
         id: authResult.data.user.id,
         name: authResult.data.user.user_metadata?.name || 'User',
-        identifier: authResult.data.user.email || authResult.data.user.phone,
+        identifier: authResult.data.user.email || authResult.data.user.phone || 'unknown',
         role: authResult.data.user.user_metadata?.role || 'Tenant',
         phone: '',
         national_id: '',

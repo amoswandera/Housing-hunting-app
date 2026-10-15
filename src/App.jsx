@@ -2181,7 +2181,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
       return
     }
 
-    if (!identifier.trim() || !password.trim()) {
+    if (!identifier || !identifier.trim() || !password || !password.trim()) {
       setError('Enter your email address and password to continue.')
       return
     }
@@ -2190,7 +2190,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
       setError('Enter a valid email address.')
       return
     }
-    if (password.length < 8) {
+    if (!password || password.length < 8) {
       setError('Password must be at least 8 characters long.')
       return
     }
