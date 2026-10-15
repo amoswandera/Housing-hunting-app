@@ -352,6 +352,7 @@ function App() {
   const [selectedApplicationDetail, setSelectedApplicationDetail] = useState(null) // For viewing application details including tenant_message
   const [showTenantApplicationDetailPage, setShowTenantApplicationDetailPage] = useState(false) // For full-page application detail view
   const [tenantDetailImageIndex, setTenantDetailImageIndex] = useState(0) // For image gallery in tenant detail page
+  const [isMobile, setIsMobile] = useState(false) // For responsive layout
   const [expandedDiscoverCard, setExpandedDiscoverCard] = useState(null) // 'homes' or 'buildings' or null
   const [expandedBookingsCard, setExpandedBookingsCard] = useState(null) // 'homes' or 'buildings' or null
 
@@ -475,6 +476,16 @@ function App() {
       fetchHomes({}, false, approvedHomeIds).then(setHomes).catch(() => {})
     }).catch(() => {})
   }, [authUser])
+
+  // Detect mobile screen size for responsive layout
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Keep this tab's sessionStorage in sync with the signed-in user so a refresh
   // rehydrates the session instead of dropping the user back to the home page.
@@ -2066,9 +2077,19 @@ function App() {
             <button type="button" className="close-button" onClick={() => { setShowTenantApplicationDetailPage(false); setSelectedApplicationDetail(null); setTenantDetailImageIndex(0); }}>×</button>
           </div>
           
-          <div style={{ display: 'flex', flexDirection: 'row', minHeight: 'calc(100vh - 60px)' }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: 'calc(100vh - 60px)' }}>
             {/* Left Side - Unit Images Gallery */}
-            <div style={{ flex: 1, background: '#f5f5f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', minWidth: '50%' }}>
+            <div style={{ 
+              flex: isMobile ? 'none' : 1, 
+              background: '#f5f5f5', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              padding: isMobile ? '16px' : '20px', 
+              minWidth: isMobile ? '100%' : '50%',
+              maxHeight: isMobile ? '50vh' : 'auto'
+            }}>
               {(() => {
                 const hasImages = selectedApplicationDetail.images && selectedApplicationDetail.images.length > 0
                 const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
@@ -2083,7 +2104,8 @@ function App() {
                       alt={selectedApplicationDetail.name || 'Unit'}
                       style={{
                         maxWidth: '100%',
-                        maxHeight: '60vh',
+                        maxHeight: isMobile ? '40vh' : '60vh',
+                        width: isMobile ? '100%' : 'auto',
                         objectFit: 'contain',
                         borderRadius: '8px',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
@@ -2094,32 +2116,32 @@ function App() {
                     />
                     {/* Image Navigation */}
                     {hasImages && selectedApplicationDetail.images.length > 1 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px', marginTop: isMobile ? '8px' : '16px' }}>
                         <button
                           onClick={() => setTenantDetailImageIndex(prev => prev === 0 ? selectedApplicationDetail.images.length - 1 : prev - 1)}
                           style={{
-                            padding: '8px 16px',
+                            padding: isMobile ? '6px 12px' : '8px 16px',
                             background: '#fff',
                             border: '1px solid #d2ded5',
                             borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '18px'
+                            fontSize: isMobile ? '16px' : '18px'
                           }}
                         >
                           ‹
                         </button>
-                        <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                        <span style={{ fontSize: isMobile ? '12px' : '14px', color: '#6b7280' }}>
                           {tenantDetailImageIndex + 1} / {selectedApplicationDetail.images.length}
                         </span>
                         <button
                           onClick={() => setTenantDetailImageIndex(prev => (prev + 1) % selectedApplicationDetail.images.length)}
                           style={{
-                            padding: '8px 16px',
+                            padding: isMobile ? '6px 12px' : '8px 16px',
                             background: '#fff',
                             border: '1px solid #d2ded5',
                             borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '18px'
+                            fontSize: isMobile ? '16px' : '18px'
                           }}
                         >
                           ›
@@ -2128,15 +2150,15 @@ function App() {
                     )}
                     {/* Thumbnails */}
                     {hasImages && selectedApplicationDetail.images.length > 1 && (
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: isMobile ? '4px' : '8px', marginTop: isMobile ? '8px' : '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
                         {selectedApplicationDetail.images.map((img, index) => (
                           <img
                             key={index}
                             src={extractUrl(img)}
                             alt={`Thumbnail ${index + 1}`}
                             style={{
-                              width: '60px',
-                              height: '60px',
+                              width: isMobile ? '40px' : '60px',
+                              height: isMobile ? '40px' : '60px',
                               objectFit: 'cover',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -2154,9 +2176,14 @@ function App() {
             </div>
 
             {/* Right Side - Application Details */}
-            <div style={{ flex: 1, padding: '32px', background: '#fff', minWidth: '50%' }}>
+            <div style={{ 
+              flex: isMobile ? 'none' : 1, 
+              padding: isMobile ? '16px' : '32px', 
+              background: '#fff', 
+              minWidth: isMobile ? '100%' : '50%' 
+            }}>
               <p className="eyebrow">APPLICATION</p>
-              <h2 style={{ fontSize: '28px', marginBottom: '24px' }}>{selectedApplicationDetail.name || 'Unit'}</h2>
+              <h2 style={{ fontSize: isMobile ? '22px' : '28px', marginBottom: isMobile ? '16px' : '24px' }}>{selectedApplicationDetail.name || 'Unit'}</h2>
               
               {/* Status Badge */}
               <div style={{ marginBottom: '24px' }}>
@@ -2168,7 +2195,7 @@ function App() {
               {/* Unit Details */}
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '16px', marginBottom: '12px', color: '#1d3d33' }}>Unit Information</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', gap: isMobile ? '8px' : '12px' }}>
                   <div>
                     <strong style={{ fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Location</strong>
                     <span style={{ fontSize: '14px', color: '#1d3d33' }}>{selectedApplicationDetail.location || '—'}</span>
@@ -2246,11 +2273,11 @@ function App() {
                   </div>
                 )}
                 {selectedApplicationDetail.agent_phone && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <a href={`tel:${cleanPhoneNumber(selectedApplicationDetail.agent_phone)}`} className="contact-btn call-btn" style={{ padding: '8px 16px' }}>
+                  <div style={{ display: 'flex', gap: isMobile ? '6px' : '8px', marginTop: '12px' }}>
+                    <a href={`tel:${cleanPhoneNumber(selectedApplicationDetail.agent_phone)}`} className="contact-btn call-btn" style={{ padding: isMobile ? '6px 12px' : '8px 16px' }}>
                       <span>📞</span> Call
                     </a>
-                    <a href={getWhatsAppUrl(selectedApplicationDetail.agent_phone, selectedApplicationDetail.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn" style={{ padding: '8px 16px' }}>
+                    <a href={getWhatsAppUrl(selectedApplicationDetail.agent_phone, selectedApplicationDetail.name)} target="_blank" rel="noopener noreferrer" className="contact-btn whatsapp-btn" style={{ padding: isMobile ? '6px 12px' : '8px 16px' }}>
                       <span>💬</span> WhatsApp
                     </a>
                   </div>
@@ -2261,11 +2288,11 @@ function App() {
               {selectedApplicationDetail.status === 'approved' && (
                 <div style={{ marginBottom: '24px' }}>
                   {selectedApplicationDetail.contract_pdf_url
-                    ? <a href={selectedApplicationDetail.contract_pdf_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', padding: '12px 24px', background: '#3e735e', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>View Contract ↗</a>
+                    ? <a href={selectedApplicationDetail.contract_pdf_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', padding: isMobile ? '10px 16px' : '12px 24px', background: '#3e735e', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: isMobile ? '13px' : '14px', fontWeight: 600 }}>View Contract ↗</a>
                     : <span style={{ fontSize: '13px', color: '#9ca3af' }}>Contract pending</span>}
                   {selectedApplicationDetail.payment_deadline && selectedApplicationDetail.payment_status !== 'paid' && (
                     <div style={{ marginTop: '12px' }}>
-                      <span style={{ fontSize: '13px', color: new Date(selectedApplicationDetail.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
+                      <span style={{ fontSize: isMobile ? '12px' : '13px', color: new Date(selectedApplicationDetail.payment_deadline) < new Date() ? '#ef4444' : '#f59e0b', fontWeight: 700 }}>
                         {new Date(selectedApplicationDetail.payment_deadline) < new Date()
                           ? '⚠ Payment deadline passed'
                           : `⏰ Pay by ${new Date(selectedApplicationDetail.payment_deadline).toLocaleString()}`}
@@ -2273,7 +2300,7 @@ function App() {
                     </div>
                   )}
                   {selectedApplicationDetail.payment_status !== 'paid' && (
-                    <button style={{ marginTop: '12px', padding: '12px 24px', background: '#d9775d', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                    <button style={{ marginTop: '12px', padding: isMobile ? '10px 16px' : '12px 24px', background: '#d9775d', color: '#fff', border: 'none', borderRadius: '6px', fontSize: isMobile ? '13px' : '14px', fontWeight: 600, cursor: 'pointer' }}
                       onClick={() => { setPaymentApplication(selectedApplicationDetail); setPaymentPhone(authUser.phone || ''); setPaymentAmount(selectedApplicationDetail.deposit) }}>
                       Make Payment
                     </button>
@@ -2288,7 +2315,7 @@ function App() {
 
               {/* Cancel for Submitted Applications */}
               {selectedApplicationDetail.status === 'submitted' && (
-                <button style={{ padding: '12px 24px', background: '#c97861', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                <button style={{ padding: isMobile ? '10px 16px' : '12px 24px', background: '#c97861', color: '#fff', border: 'none', borderRadius: '6px', fontSize: isMobile ? '13px' : '14px', fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => cancelBooking(selectedApplicationDetail.home_id)}>
                 Cancel Application
               </button>
@@ -2296,7 +2323,7 @@ function App() {
 
               {/* Rate for Paid Approved Applications */}
               {selectedApplicationDetail.status === 'approved' && selectedApplicationDetail.payment_status === 'paid' && (
-                <button style={{ marginTop: '12px', padding: '12px 24px', background: '#d59a54', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                <button style={{ marginTop: '12px', padding: isMobile ? '10px 16px' : '12px 24px', background: '#d59a54', color: '#fff', border: 'none', borderRadius: '6px', fontSize: isMobile ? '13px' : '14px', fontWeight: 600, cursor: 'pointer' }}
                   onClick={() => openRatingModal(selectedApplicationDetail)}>
                 ★ Rate This Unit
               </button>
@@ -2306,11 +2333,11 @@ function App() {
 
           {/* Messages Section */}
           {['submitted', 'approved'].includes(selectedApplicationDetail.status) && (
-            <div style={{ padding: '32px', borderTop: '1px solid #e5e7eb', background: '#f9fafb' }}>
+            <div style={{ padding: isMobile ? '16px' : '32px', borderTop: '1px solid #e5e7eb', background: '#f9fafb' }}>
               <h3 style={{ fontSize: '16px', marginBottom: '16px', color: '#1d3d33' }}>Messages</h3>
               {openMessageAppId === selectedApplicationDetail.id ? (
                 <>
-                  <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px', background: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ maxHeight: isMobile ? '200px' : '300px', overflowY: 'auto', marginBottom: '16px', background: '#fff', padding: isMobile ? '12px' : '16px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                     {(messageThreads[selectedApplicationDetail.id] || []).length === 0 ? (
                       <p style={{ color: '#9ca3af', fontSize: '13px', textAlign: 'center', margin: '20px 0' }}>No messages yet. Start a conversation with the agent.</p>
                     ) : (
@@ -2328,13 +2355,13 @@ function App() {
                       value={newMessageText}
                       onChange={(e) => setNewMessageText(e.target.value)}
                       placeholder="Type your message..."
-                      style={{ flex: 1, padding: '12px', border: '1px solid #d2ded5', borderRadius: '6px', fontSize: '14px' }}
+                      style={{ flex: 1, padding: isMobile ? '10px' : '12px', border: '1px solid #d2ded5', borderRadius: '6px', fontSize: isMobile ? '13px' : '14px' }}
                       onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(selectedApplicationDetail.id)}
                     />
                     <button
                       onClick={() => handleSendMessage(selectedApplicationDetail.id)}
                       disabled={messageSending || !newMessageText.trim()}
-                      style={{ padding: '12px 24px', background: '#3e735e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: messageSending || !newMessageText.trim() ? 'not-allowed' : 'pointer', opacity: messageSending || !newMessageText.trim() ? 0.6 : 1 }}
+                      style={{ padding: isMobile ? '10px 16px' : '12px 24px', background: '#3e735e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: isMobile ? '13px' : '14px', fontWeight: 600, cursor: messageSending || !newMessageText.trim() ? 'not-allowed' : 'pointer', opacity: messageSending || !newMessageText.trim() ? 0.6 : 1 }}
                     >
                       {messageSending ? 'Sending...' : 'Send'}
                     </button>
@@ -2346,7 +2373,7 @@ function App() {
                     setOpenMessageAppId(selectedApplicationDetail.id)
                     await loadMessages(selectedApplicationDetail.id)
                   }}
-                  style={{ padding: '12px 24px', background: '#3e735e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: isMobile ? '10px 16px' : '12px 24px', background: '#3e735e', color: '#fff', border: 'none', borderRadius: '6px', fontSize: isMobile ? '13px' : '14px', fontWeight: 600, cursor: 'pointer' }}
                 >
                   💬 Open Messages
                 </button>
