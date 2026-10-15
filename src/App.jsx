@@ -707,8 +707,14 @@ function App() {
   }
 
   const createAccount = async (account) => {
-    const result = await registerUser(account)
-    setAccounts((current) => [...current, result.user])
+    try {
+      const result = await registerUser(account)
+      if (result && result.user) {
+        setAccounts((current) => [...current, result.user])
+      }
+    } catch (error) {
+      throw error
+    }
   }
 
   const saveTenantProfile = async (event) => {
@@ -807,9 +813,9 @@ function App() {
   const renderBuildingCard = (building) => {
     // Use building images if available, otherwise fall back to first unit image
     const extractUrl = (img) => img?.url || img?.image_url || img?.image || ''
-    const primaryImage = building.images && building.images.length > 0
+    const primaryImage = building.images && Array.isArray(building.images) && building.images.length > 0
       ? extractUrl(building.images.find(i => i.is_primary) || building.images[0])
-      : (building.units.length > 0 ? building.units[0].image : '')
+      : (Array.isArray(building.units) && building.units.length > 0 ? building.units[0].image : '')
     const priceRange = building.minPrice === building.maxPrice
       ? formatKes(building.minPrice)
       : `${formatKes(building.minPrice)} – ${formatKes(building.maxPrice)}`
@@ -841,7 +847,7 @@ function App() {
             </div>
           </div>
           <p className="home-details">
-            {building.categories.join(', ')} <span>·</span> {building.units.length} total units
+            {Array.isArray(building.categories) ? building.categories.join(', ') : ''} <span>·</span> {Array.isArray(building.units) ? building.units.length : 0} total units
           </p>
           <div className="home-footer">
             <div>
@@ -2143,7 +2149,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
         setError('Password must be at least 8 characters long.')
         return
       }
-      if (accounts.some((account) => account.identifier === normalizedIdentifier)) {
+      if (Array.isArray(accounts) && accounts.some((account) => account.identifier === normalizedIdentifier)) {
         setError('An account with this email or phone number already exists. Sign in instead.')
         return
       }
