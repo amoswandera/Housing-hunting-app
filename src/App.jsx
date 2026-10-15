@@ -217,12 +217,19 @@ const getStatusColor = (status) => {
 }
 
 const normalizeIdentifier = (value) => {
-  const trimmed = value.trim().toLowerCase()
+  if (!value) return ''
+  const trimmed = String(value).trim().toLowerCase()
   return trimmed.startsWith('+') ? `+${trimmed.slice(1).replace(/\D/g, '')}` : trimmed.replace(/[\s()-]/g, '')
 }
 
-const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-const isValidPhone = (value) => /^(?:\+254|0)(?:1|7)\d{8}$/.test(value)
+const isValidEmail = (value) => {
+  if (!value) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+}
+const isValidPhone = (value) => {
+  if (!value) return false
+  return /^(?:\+254|0)(?:1|7)\d{8}$/.test(value)
+}
 const isValidIdentifier = (value) => isValidEmail(value) || isValidPhone(value)
 
 const cleanPhoneNumber = (phone) => {
@@ -2131,7 +2138,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
     }
 
     if (mode === 'register') {
-      if (!name.trim() || !identifier.trim() || !password.trim() || !confirmPassword.trim()) {
+      if (!name || !name.trim() || !identifier || !identifier.trim() || !password || !password.trim() || !confirmPassword || !confirmPassword.trim()) {
         setError('Complete all fields to create your account.')
         return
       }
@@ -2145,7 +2152,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
         setError('Passwords do not match.')
         return
       }
-      if (password.length < 8) {
+      if (!password || password.length < 8) {
         setError('Password must be at least 8 characters long.')
         return
       }
@@ -2153,7 +2160,7 @@ function AuthScreen({ accounts, onLogin, onCreateAccount, onBrowseHomes }) {
         setError('An account with this email or phone number already exists. Sign in instead.')
         return
       }
-      const initials = name.trim().split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+      const initials = name && name.trim() ? name.trim().split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() : 'TN'
       try {
         const result = await onCreateAccount({ identifier: normalizedIdentifier, password, name: name.trim(), initials, role: 'Tenant' })
         // If email verification is required, switch to login mode
