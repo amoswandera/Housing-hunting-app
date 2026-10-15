@@ -312,7 +312,8 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   handleSupabaseError(homesError)
 
   // Get all home IDs
-  const homeIds = homesData.map(h => h.id)
+  const homesArray = Array.isArray(homesData) ? homesData : []
+  const homeIds = homesArray.map(h => h.id)
 
   // Fetch FAQs for all homes (gracefully fail if table doesn't exist yet)
   let faqsByHome = {}
@@ -363,11 +364,11 @@ export const fetchHomes = async (filters = {}, adminMode = false, includeHomeIds
   }
 
   // Fetch building images for homes that are part of buildings
-  const buildingIds = [...new Set(homesData.filter(h => h.building_id).map(h => h.building_id))]
+  const buildingIds = [...new Set(homesArray.filter(h => h.building_id).map(h => h.building_id))]
   let buildingImagesByBuilding = {}
   let buildingsData = {}
 
-  if (buildingIds.length > 0) {
+  if (Array.isArray(buildingIds) && buildingIds.length > 0) {
     try {
       // Fetch building details (without RLS blocking)
       const { data: buildings } = await supabase
@@ -1072,7 +1073,7 @@ export const fetchMyApplications = async (token) => {
   // Fetch home details via SECURITY DEFINER function — bypasses available=true RLS
   // The function now includes the primary image from home_images table
   let homeMap = {}
-  if (homeIds.length > 0) {
+  if (Array.isArray(homeIds) && homeIds.length > 0) {
     const { data: homeRows, error: fnError } = await supabase
       .rpc('get_tenant_home_details', { p_home_ids: homeIds })
 
@@ -1080,19 +1081,19 @@ export const fetchMyApplications = async (token) => {
       console.error('Error fetching home details:', fnError)
     }
 
-    if (homeRows) {
+    if (Array.isArray(homeRows)) {
       homeRows.forEach(h => { homeMap[h.id] = h })
     }
   }
 
   // Also fetch building_id directly from homes table in case the function doesn't include it
-  if (homeIds.length > 0) {
+  if (Array.isArray(homeIds) && homeIds.length > 0) {
     const { data: homesDirect } = await supabase
       .from('homes')
       .select('id, building_id')
       .in('id', homeIds)
     
-    if (homesDirect) {
+    if (Array.isArray(homesDirect)) {
       homesDirect.forEach(h => {
         if (homeMap[h.id]) {
           homeMap[h.id].building_id = h.building_id
@@ -1104,7 +1105,7 @@ export const fetchMyApplications = async (token) => {
   // Fetch home_images for all home IDs in one query
   // This is a backup in case the function doesn't return images
   let imagesByHome = {}
-  if (homeIds.length > 0) {
+  if (Array.isArray(homeIds) && homeIds.length > 0) {
     try {
       const { data: imagesData, error: imagesError } = await supabase
         .from('home_images')
@@ -1123,7 +1124,7 @@ export const fetchMyApplications = async (token) => {
     }
   }
 
-  return data.map((app) => {
+  return (Array.isArray(data) ? data : []).map((app) => {
     const home = homeMap[app.home_id] || null
     const imgs = imagesByHome[app.home_id]
     const primaryImg = imgs?.find(i => i.is_primary) || imgs?.[0]
@@ -1757,11 +1758,12 @@ export const fetchSuperAdminApplications = async (token) => {
   handleSupabaseError(error)
 
   // Get unique building IDs from applications
-  const buildingIds = [...new Set((data || []).filter(app => app.homes?.building_id).map(app => app.homes.building_id))]
+  const dataArray = Array.isArray(data) ? data : []
+  const buildingIds = [...new Set(dataArray.filter(app => app.homes?.building_id).map(app => app.homes.building_id))]
 
   // Fetch building details
   let buildingsData = {}
-  if (buildingIds.length > 0) {
+  if (Array.isArray(buildingIds) && buildingIds.length > 0) {
     try {
       const { data: buildings } = await supabase
         .from('buildings')
@@ -2155,10 +2157,11 @@ export const fetchBuildings = async (token) => {
   handleSupabaseError(error)
 
   // Fetch building images for each building
-  const buildingIds = (data || []).map(b => b.id)
+  const dataArray = Array.isArray(data) ? data : []
+  const buildingIds = dataArray.map(b => b.id)
   let buildingImagesByBuilding = {}
 
-  if (buildingIds.length > 0) {
+  if (Array.isArray(buildingIds) && buildingIds.length > 0) {
     try {
       const { data: buildingImages } = await supabase
         .from('building_images')
@@ -2183,7 +2186,7 @@ export const fetchBuildings = async (token) => {
   }
 
   // Merge images into building data
-  return (data || []).map(building => ({
+  return dataArray.map(building => ({
     ...building,
     images: buildingImagesByBuilding[building.id] || []
   }))
@@ -2204,10 +2207,11 @@ export const fetchAllBuildingsAdmin = async (token) => {
   handleSupabaseError(error)
 
   // Fetch building images for each building
-  const buildingIds = (data || []).map(b => b.id)
+  const dataArray = Array.isArray(data) ? data : []
+  const buildingIds = dataArray.map(b => b.id)
   let buildingImagesByBuilding = {}
 
-  if (buildingIds.length > 0) {
+  if (Array.isArray(buildingIds) && buildingIds.length > 0) {
     try {
       const { data: buildingImages } = await supabase
         .from('building_images')
@@ -2232,7 +2236,7 @@ export const fetchAllBuildingsAdmin = async (token) => {
   }
 
   // Merge images into building data
-  return (data || []).map(building => ({
+  return dataArray.map(building => ({
     ...building,
     agent_name: building.profiles?.name || 'Unknown',
     images: buildingImagesByBuilding[building.id] || []

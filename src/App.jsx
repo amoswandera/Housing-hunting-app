@@ -455,12 +455,13 @@ function App() {
   useEffect(() => {
     if (!authUser?.token || authUser.role !== 'Tenant') return
     fetchMyApplications(authUser.token).then((items) => {
-      setApplications(items)
-      setBooked(items.filter((item) => ['submitted', 'approved'].includes(item.status)).map((item) => item.home_id))
+      const applicationsArray = Array.isArray(items) ? items : []
+      setApplications(applicationsArray)
+      setBooked(applicationsArray.filter((item) => ['submitted', 'approved'].includes(item.status)).map((item) => item.home_id))
       // Re-fetch homes including any approved home so the tenant can still view it
       // in the discover view alongside other available homes
       // BUT: Exclude building units - they should only be visible through the building card
-      const approvedHomeIds = items
+      const approvedHomeIds = applicationsArray
         .filter(a => a.status === 'approved' && a.home_id && !a.building_id)
         .map(a => a.home_id)
       fetchHomes({}, false, approvedHomeIds).then(setHomes).catch(() => {})
