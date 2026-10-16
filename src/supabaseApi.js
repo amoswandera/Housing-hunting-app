@@ -2549,13 +2549,55 @@ export const fetchBuildingsForTenant = async (token) => {
     }
   }
 
-  // Merge images into building data
-  return mergedBuildings.map(building => ({
-    ...building,
-    images: buildingImagesByBuilding[building.id] || [],
-    // Mark if this is a building where tenant has an approved unit
-    hasApprovedUnit: approvedUnitBuildings.find(b => b.id === building.id) !== undefined
-  }))
+  // Fetch units for each building to compute price ranges and categories
+  const buildingUnitsMap = {}
+  if (buildingIds.length > 0) {
+    try {
+      const { data: units } = await supabase
+        .from('homes')
+        .select('building_id, price, category, available')
+        .in('building_id', buildingIds)
+      
+      if (Array.isArray(units)) {
+        units.forEach(unit => {
+          if (!buildingUnitsMap[unit.building_id]) {
+            buildingUnitsMap[unit.building_id] = {
+              totalUnits: 0,
+              availableUnits: 0,
+              minPrice: Infinity,
+              maxPrice: 0,
+              categories: new Set()
+            }
+          }
+          buildingUnitsMap[unit.building_id].totalUnits++
+          if (unit.available) {
+            buildingUnitsMap[unit.building_id].availableUnits++
+            buildingUnitsMap[unit.building_id].minPrice = Math.min(buildingUnitsMap[unit.building_id].minPrice, unit.price)
+            buildingUnitsMap[unit.building_id].maxPrice = Math.max(buildingUnitsMap[unit.building_id].maxPrice, unit.price)
+            if (unit.category) buildingUnitsMap[unit.building_id].categories.add(unit.category)
+          }
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching units:', error)
+    }
+  }
+
+  // Merge images and unit info into building data
+  return mergedBuildings.map(building => {
+    const unitInfo = buildingUnitsMap[building.id] || { minPrice: Infinity, maxPrice: 0, categories: new Set() }
+    return {
+      ...building,
+      images: buildingImagesByBuilding[building.id] || [],
+      // Mark if this is a building where tenant has an approved unit
+      hasApprovedUnit: approvedUnitBuildings.find(b => b.id === building.id) !== undefined,
+      // Computed fields for rendering
+      availableUnits: building.available_units,
+      minPrice: unitInfo.minPrice === Infinity ? 0 : unitInfo.minPrice,
+      maxPrice: unitInfo.maxPrice,
+      categories: Array.from(unitInfo.categories)
+    }
+  })
 }
 
 export const fetchBuildingImages = async (buildingId) => {
