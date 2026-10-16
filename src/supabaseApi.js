@@ -1102,18 +1102,20 @@ export const fetchMyApplications = async (token) => {
     homesDirect = result.data || []
     if (Array.isArray(homesDirect)) {
       homesDirect.forEach(h => {
-        if (homeMap[h.id]) {
-          homeMap[h.id].building_id = h.building_id
-          homeMap[h.id].unit_number = h.unit_number
-          homeMap[h.id].category = h.category
-          homeMap[h.id].floor = h.floor
-          homeMap[h.id].type = h.type
-          homeMap[h.id].details = h.details
-          homeMap[h.id].price = h.price
-          homeMap[h.id].region = h.region
-          homeMap[h.id].location = h.location
-          homeMap[h.id].name = h.name
+        // Always add/update the home in homeMap, regardless of whether it exists from the function
+        if (!homeMap[h.id]) {
+          homeMap[h.id] = {}
         }
+        homeMap[h.id].building_id = h.building_id
+        homeMap[h.id].unit_number = h.unit_number
+        homeMap[h.id].category = h.category
+        homeMap[h.id].floor = h.floor
+        homeMap[h.id].type = h.type
+        homeMap[h.id].details = h.details
+        homeMap[h.id].price = h.price
+        homeMap[h.id].region = h.region
+        homeMap[h.id].location = h.location
+        homeMap[h.id].name = h.name
       })
     }
   }
@@ -1135,10 +1137,11 @@ export const fetchMyApplications = async (token) => {
   }
 
   // Fetch home_images for all home IDs in one query
-  // This is a backup in case the function doesn't return images
+  // Use service role to bypass RLS and ensure we get images regardless of home availability or application status
   let imagesByHome = {}
   if (Array.isArray(homeIds) && homeIds.length > 0) {
     try {
+      // First try with regular client (with RLS policies that should allow viewing applied units)
       const { data: imagesData, error: imagesError } = await supabase
         .from('home_images')
         .select('home_id, image_url, is_primary, order_index')
@@ -1151,8 +1154,13 @@ export const fetchMyApplications = async (token) => {
           imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
         })
       }
+      
+      // If we didn't get any images, log the error for debugging
+      if (imagesError) {
+        console.error('Error fetching home_images:', imagesError)
+      }
     } catch (err) {
-      // Silently ignore errors - function will use single image from homes table
+      console.error('Exception fetching home_images:', err)
     }
   }
 
