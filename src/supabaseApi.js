@@ -1092,72 +1092,138 @@ export const fetchMyApplications = async (token) => {
     }
   }
 
-  // Also fetch building_id and other fields directly from homes table in case the function doesn't include them
+  // Also fetch building_id and other fields using SECURITY DEFINER function to bypass RLS
+  // This ensures we get home details even for declined/cancelled applications where unit might be unavailable
   if (Array.isArray(homeIds) && homeIds.length > 0) {
-    const result = await supabase
-      .from('homes')
-      .select('id, building_id, unit_number, category, floor, type, details, price, region, location, name')
-      .in('id', homeIds)
-    
-    homesDirect = result.data || []
-    if (Array.isArray(homesDirect)) {
-      homesDirect.forEach(h => {
-        // Always add/update the home in homeMap, regardless of whether it exists from the function
-        if (!homeMap[h.id]) {
-          homeMap[h.id] = {}
+    try {
+      const { data: homesBypass, error: bypassError } = await supabase
+        .rpc('get_tenant_homes_bypass_rls', { p_home_ids: homeIds })
+
+      if (!bypassError && Array.isArray(homesBypass)) {
+        homesDirect = homesBypass
+        homesBypass.forEach(h => {
+          // Always add/update the home in homeMap, regardless of whether it exists from the function
+          if (!homeMap[h.id]) {
+            homeMap[h.id] = {}
+          }
+          homeMap[h.id].building_id = h.building_id
+          homeMap[h.id].unit_number = h.unit_number
+          homeMap[h.id].category = h.category
+          homeMap[h.id].floor = h.floor
+          homeMap[h.id].type = h.type
+          homeMap[h.id].details = h.details
+          homeMap[h.id].price = h.price
+          homeMap[h.id].region = h.region
+          homeMap[h.id].location = h.location
+          homeMap[h.id].name = h.name
+          homeMap[h.id].agent_name = h.agent_name
+          homeMap[h.id].agent_phone = h.agent_phone
+          homeMap[h.id].agent_bio = h.agent_bio
+          homeMap[h.id].agent_company = h.agent_company
+        })
+      } else {
+        console.error('Error fetching homes with bypass RLS:', bypassError)
+        // Fallback to direct query if the function doesn't exist yet
+        const result = await supabase
+          .from('homes')
+          .select('id, building_id, unit_number, category, floor, type, details, price, region, location, name')
+          .in('id', homeIds)
+        
+        homesDirect = result.data || []
+        if (Array.isArray(homesDirect)) {
+          homesDirect.forEach(h => {
+            if (!homeMap[h.id]) {
+              homeMap[h.id] = {}
+            }
+            homeMap[h.id].building_id = h.building_id
+            homeMap[h.id].unit_number = h.unit_number
+            homeMap[h.id].category = h.category
+            homeMap[h.id].floor = h.floor
+            homeMap[h.id].type = h.type
+            homeMap[h.id].details = h.details
+            homeMap[h.id].price = h.price
+            homeMap[h.id].region = h.region
+            homeMap[h.id].location = h.location
+            homeMap[h.id].name = h.name
+          })
         }
-        homeMap[h.id].building_id = h.building_id
-        homeMap[h.id].unit_number = h.unit_number
-        homeMap[h.id].category = h.category
-        homeMap[h.id].floor = h.floor
-        homeMap[h.id].type = h.type
-        homeMap[h.id].details = h.details
-        homeMap[h.id].price = h.price
-        homeMap[h.id].region = h.region
-        homeMap[h.id].location = h.location
-        homeMap[h.id].name = h.name
-      })
+      }
+    } catch (err) {
+      console.error('Exception fetching homes with bypass RLS:', err)
     }
   }
 
-  // Fetch building names for building units
+  // Fetch building names for building units using SECURITY DEFINER to bypass RLS
   const buildingIds = [...new Set(homesDirect.filter(h => h.building_id).map(h => h.building_id))]
   let buildingMap = {}
   if (Array.isArray(buildingIds) && buildingIds.length > 0) {
-    const { data: buildings } = await supabase
-      .from('buildings')
-      .select('id, name')
-      .in('id', buildingIds)
-    
-    if (Array.isArray(buildings)) {
-      buildings.forEach(b => {
-        buildingMap[b.id] = b.name
-      })
+    try {
+      // Try using the bypass function first
+      const { data: buildingsBypass, error: buildingBypassError } = await supabase
+        .rpc('get_buildings_bypass_rls', { p_building_ids: buildingIds })
+
+      if (!buildingBypassError && Array.isArray(buildingsBypass)) {
+        buildingsBypass.forEach(b => {
+          buildingMap[b.id] = b.name
+        })
+      } else {
+        // Fallback to direct query
+        const { data: buildings } = await supabase
+          .from('buildings')
+          .select('id, name')
+          .in('id', buildingIds)
+        
+        if (Array.isArray(buildings)) {
+          buildings.forEach(b => {
+            buildingMap[b.id] = b.name
+          })
+        }
+      }
+    } catch (err) {
+      console.error('Exception fetching buildings:', err)
+      // Fallback to direct query
+      const { data: buildings } = await supabase
+        .from('buildings')
+        .select('id, name')
+        .in('id', buildingIds)
+      
+      if (Array.isArray(buildings)) {
+        buildings.forEach(b => {
+          buildingMap[b.id] = b.name
+        })
+      }
     }
   }
 
-  // Fetch home_images for all home IDs in one query
-  // Use service role to bypass RLS and ensure we get images regardless of home availability or application status
+  // Fetch home_images for all home IDs in one query using SECURITY DEFINER to bypass RLS
+  // This ensures we get images regardless of home availability or application status
   let imagesByHome = {}
   if (Array.isArray(homeIds) && homeIds.length > 0) {
     try {
-      // First try with regular client (with RLS policies that should allow viewing applied units)
-      const { data: imagesData, error: imagesError } = await supabase
-        .from('home_images')
-        .select('home_id, image_url, is_primary, order_index')
-        .in('home_id', homeIds)
-        .order('order_index', { ascending: true })
+      // Try using the bypass function first
+      const { data: imagesBypass, error: imagesBypassError } = await supabase
+        .rpc('get_home_images_bypass_rls', { p_home_ids: homeIds })
 
-      if (!imagesError && imagesData) {
-        imagesData.forEach(img => {
+      if (!imagesBypassError && Array.isArray(imagesBypass)) {
+        imagesBypass.forEach(img => {
           if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
           imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
         })
-      }
-      
-      // If we didn't get any images, log the error for debugging
-      if (imagesError) {
-        console.error('Error fetching home_images:', imagesError)
+      } else {
+        // Fallback to regular query with RLS policies
+        console.error('Error fetching images with bypass RLS:', imagesBypassError)
+        const { data: imagesData, error: imagesError } = await supabase
+          .from('home_images')
+          .select('home_id, image_url, is_primary, order_index')
+          .in('home_id', homeIds)
+          .order('order_index', { ascending: true })
+
+        if (!imagesError && imagesData) {
+          imagesData.forEach(img => {
+            if (!imagesByHome[img.home_id]) imagesByHome[img.home_id] = []
+            imagesByHome[img.home_id].push({ url: img.image_url || '', is_primary: img.is_primary })
+          })
+        }
       }
     } catch (err) {
       console.error('Exception fetching home_images:', err)
