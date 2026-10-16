@@ -582,16 +582,20 @@ function App() {
     }))
   }, [homes])
 
-  // Filter buildings by query and region - use fetched buildings directly
+  // Filter buildings by query and region - use fetched buildings for tenants, or compute from homes for guests
   const filteredBuildings = useMemo(() => {
-    return buildings.filter(building => {
+    // For authenticated tenants, use the fetched buildings (includes full buildings they occupy)
+    // For guests, compute from homes (buildingsWithUnits)
+    const buildingsToFilter = authUser?.token && authUser.role === 'Tenant' ? buildings : buildingsWithUnits
+    
+    return buildingsToFilter.filter(building => {
       const queryMatch = query === '' || 
         building.name.toLowerCase().includes(query.toLowerCase()) ||
         building.location.toLowerCase().includes(query.toLowerCase())
       const regionMatch = region === 'All regions' || building.region === region
       return queryMatch && regionMatch
     })
-  }, [buildings, query, region])
+  }, [buildings, buildingsWithUnits, query, region, authUser?.token, authUser?.role])
 
   // Standalone homes (not part of any building)
   const standaloneHomes = useMemo(() => {
@@ -655,17 +659,25 @@ function App() {
 
   const openBuildingUnits = async (building) => {
     try {
-      let units = await fetchUnitsInBuilding(building.id, {
-        category: unitFilterCategory,
-        floor: unitFilterFloor
-      })
+      let units
       
-      // If building is full and tenant has approved unit, filter to show only that unit
-      if (building.hasApprovedUnit && building.available_units === 0) {
-        const approvedApps = applications.filter(a => a.status === 'approved' && a.building_id === building.id)
-        if (approvedApps.length > 0) {
-          const approvedHomeIds = approvedApps.map(a => a.home_id)
-          units = units.filter(u => approvedHomeIds.includes(u.id))
+      // If building already has units (buildingsWithUnits structure), use them directly
+      if (building.units && Array.isArray(building.units)) {
+        units = building.units
+      } else {
+        // Otherwise fetch units from the API
+        units = await fetchUnitsInBuilding(building.id, {
+          category: unitFilterCategory,
+          floor: unitFilterFloor
+        })
+        
+        // If building is full and tenant has approved unit, filter to show only that unit
+        if (building.hasApprovedUnit && building.available_units === 0) {
+          const approvedApps = applications.filter(a => a.status === 'approved' && a.building_id === building.id)
+          if (approvedApps.length > 0) {
+            const approvedHomeIds = approvedApps.map(a => a.home_id)
+            units = units.filter(u => approvedHomeIds.includes(u.id))
+          }
         }
       }
       
@@ -679,13 +691,24 @@ function App() {
 
   const openBuildingDetail = async (building) => {
     try {
-      const images = await fetchBuildingImages(building.id)
-      setBuildingDetailImages(images.map(img => ({
-        ...img,
-        url: img.image_url || img.url || img.image || ''
-      })))
-      setSelectedBuilding(building)
-      setShowBuildingDetail(true)
+      // If building already has images (buildingsWithUnits structure), use them directly
+      if (building.images && Array.isArray(building.images) && building.images.length > 0) {
+        setBuildingDetailImages(building.images.map(img => ({
+          ...img,
+          url: img.image_url || img.url || img.image || ''
+        })))
+        setSelectedBuilding(building)
+        setShowBuildingDetail(true)
+      } else {
+        // Otherwise fetch images from the API
+        const images = await fetchBuildingImages(building.id)
+        setBuildingDetailImages(images.map(img => ({
+          ...img,
+          url: img.image_url || img.url || img.image || ''
+        })))
+        setSelectedBuilding(building)
+        setShowBuildingDetail(true)
+      }
     } catch (error) {
       showToast('Failed to load building details')
     }
@@ -857,9 +880,18 @@ function App() {
     const primaryImage = building.images && Array.isArray(building.images) && building.images.length > 0
       ? extractUrl(building.images.find(i => i.is_primary) || building.images[0])
       : (Array.isArray(building.units) && building.units.length > 0 ? building.units[0].image : '')
-    const priceRange = building.minPrice === building.maxPrice
-      ? formatKes(building.minPrice)
-      : `${formatKes(building.minPrice)} – ${formatKes(building.maxPrice)}`
+    
+    // Handle both structures: buildingsWithUnits and fetchBuildingsForTenant
+    const minPrice = building.minPrice ?? 0
+    const maxPrice = building.maxPrice ?? 0
+    const priceRange = minPrice === maxPrice
+      ? formatKes(minPrice)
+      : `${formatKes(minPrice)} – ${formatKes(maxPrice)}`
+
+    // Show different tag based on whether tenant has approved unit
+    const buildingTag = building.hasApprovedUnit 
+      ? 'Approved for you' 
+      : `${building.availableUnits || 0} units available`
 
     return (
       <article className="home-card" key={building.id}>
@@ -878,7 +910,7 @@ function App() {
             }}
           />
           <span className="home-tag" style={{ background: building.hasApprovedUnit ? '#10b981' : undefined }}>
-            {building.hasApprovedUnit ? 'Approved for you' : `${building.availableUnits} units available`}
+            {buildingTag}
           </span>
           <span className="photo-hint">View units ↗</span>
         </div>
