@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AgentDashboard from './AgentDashboard'
-import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchAllBuildingsAdmin, fetchBookings, fetchHomes, fetchMessages, fetchMyApplications, fetchMyRating, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, sendMessage, submitApplication, submitRating, transferAgentHomes, updatePassword, updateProfile, createBuilding, fetchBuildings, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding } from './supabaseApi'
+import { cancelApplication, cancelBooking as cancelBookingApi, createSuperAdminUser, deleteSuperAdminHome, deleteSuperAdminUser, fetchAgentProfile, fetchAllHomesAdmin, fetchAllBuildingsAdmin, fetchBookings, fetchHomes, fetchMessages, fetchMyApplications, fetchMyRating, fetchProfile, fetchSuperAdminApplications, fetchSuperAdminOverview, fetchSuperAdminUsers, loginUser, registerUser, relistHome, requestPayment, resendVerificationEmail, resetPassword, returnHomeToAvailable, sendMessage, submitApplication, submitRating, transferAgentHomes, updatePassword, updateProfile, createBuilding, fetchBuildings, fetchBuildingsForTenant, addUnitToBuilding, fetchBuildingDetails, fetchBuildingImages, fetchBuildingCategoryImages, fetchUnitsInBuilding, unlockBuilding } from './supabaseApi'
 import { supabase } from './supabaseClient'
 import './App.css'
 
@@ -283,6 +283,7 @@ function App() {
   const [booked, setBooked] = useState([])
   const [toast, setToast] = useState('')
   const [homes, setHomes] = useState(initialHomes)
+  const [buildings, setBuildings] = useState([]) // For tenant buildings
   const [applications, setApplications] = useState([])
   const [paymentApplication, setPaymentApplication] = useState(null)
   const [paymentPhone, setPaymentPhone] = useState('')
@@ -475,6 +476,9 @@ function App() {
         .map(a => a.home_id)
       fetchHomes({}, false, approvedHomeIds).then(setHomes).catch(() => {})
     }).catch(() => {})
+    
+    // Fetch buildings for tenants - includes buildings with approved units
+    fetchBuildingsForTenant(authUser.token).then(setBuildings).catch(err => console.error('Failed to fetch buildings:', err))
   }, [authUser])
 
   // Detect mobile screen size for responsive layout
@@ -578,16 +582,16 @@ function App() {
     }))
   }, [homes])
 
-  // Filter buildings by query and region
+  // Filter buildings by query and region - use fetched buildings directly
   const filteredBuildings = useMemo(() => {
-    return buildingsWithUnits.filter(building => {
+    return buildings.filter(building => {
       const queryMatch = query === '' || 
         building.name.toLowerCase().includes(query.toLowerCase()) ||
         building.location.toLowerCase().includes(query.toLowerCase())
       const regionMatch = region === 'All regions' || building.region === region
       return queryMatch && regionMatch
     })
-  }, [buildingsWithUnits, query, region])
+  }, [buildings, query, region])
 
   // Standalone homes (not part of any building)
   const standaloneHomes = useMemo(() => {
@@ -651,10 +655,20 @@ function App() {
 
   const openBuildingUnits = async (building) => {
     try {
-      const units = await fetchUnitsInBuilding(building.id, {
+      let units = await fetchUnitsInBuilding(building.id, {
         category: unitFilterCategory,
         floor: unitFilterFloor
       })
+      
+      // If building is full and tenant has approved unit, filter to show only that unit
+      if (building.hasApprovedUnit && building.available_units === 0) {
+        const approvedApps = applications.filter(a => a.status === 'approved' && a.building_id === building.id)
+        if (approvedApps.length > 0) {
+          const approvedHomeIds = approvedApps.map(a => a.home_id)
+          units = units.filter(u => approvedHomeIds.includes(u.id))
+        }
+      }
+      
       setBuildingUnits(units)
       setSelectedBuilding(building)
       setShowUnitSelection(true)
@@ -863,7 +877,9 @@ function App() {
               e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23e5e7eb" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af"%3ENo Image%3C/text%3E%3C/svg%3E'
             }}
           />
-          <span className="home-tag">{building.availableUnits} units available</span>
+          <span className="home-tag" style={{ background: building.hasApprovedUnit ? '#10b981' : undefined }}>
+            {building.hasApprovedUnit ? 'Approved for you' : `${building.availableUnits} units available`}
+          </span>
           <span className="photo-hint">View units ↗</span>
         </div>
         <div className="home-info">
@@ -3510,8 +3526,11 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
                           <th>Building</th>
                           <th>Location</th>
                           <th>Type</th>
-                          <th>Total Units</th>
+                          <th>Units</th>
+                          <th>Available</th>
+                          <th>Status</th>
                           <th>Agent</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3525,8 +3544,34 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
                             </td>
                             <td>{building.location}</td>
                             <td>{building.type}</td>
-                            <td>{building.total_units}</td>
+                            <td>{building.total_units}{building.max_units ? ` / ${building.max_units}` : ''}</td>
+                            <td>{building.available_units}</td>
+                            <td>
+                              {building.locked ? (
+                                <span style={{ background: '#fee2e2', color: '#dc2626', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>Locked</span>
+                              ) : (
+                                <span style={{ background: '#d1fae5', color: '#059669', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>Open</span>
+                              )}
+                            </td>
                             <td>{building.agent_name || '—'}</td>
+                            <td>
+                              {building.locked && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await unlockBuilding(building.id, token)
+                                      onNotify('Building unlocked successfully')
+                                      loadData()
+                                    } catch (error) {
+                                      onNotify(error.message)
+                                    }
+                                  }}
+                                  style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                  Unlock
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

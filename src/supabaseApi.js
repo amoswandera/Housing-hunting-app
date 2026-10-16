@@ -937,6 +937,7 @@ export const updateBuilding = async (id, buildingData, buildingImages, token) =>
       region: buildingData.region,
       type: buildingData.type,
       total_units: parseInt(buildingData.totalUnits),
+      max_units: buildingData.maxUnits ? parseInt(buildingData.maxUnits) : null,
       description: buildingData.description,
       amenities: buildingData.amenities,
     })
@@ -2159,7 +2160,7 @@ export const createBuilding = async (buildingData, buildingImages, categoryTempl
   const { data: { user }, error: userError } = await supabase.auth.getUser(token)
   handleSupabaseError(userError)
 
-  const { name, location, region, type, totalUnits, description, amenities } = buildingData
+  const { name, location, region, type, totalUnits, maxUnits, description, amenities } = buildingData
 
   // Create building
   const { data: building, error: buildingError } = await supabase
@@ -2171,6 +2172,8 @@ export const createBuilding = async (buildingData, buildingImages, categoryTempl
       type: type || 'apartment',
       total_units: totalUnits || 0,
       available_units: totalUnits || 0,
+      max_units: maxUnits ? parseInt(maxUnits) : null,
+      locked: false,
       description,
       amenities,
       agent_id: user.id,
@@ -2330,14 +2333,29 @@ export const addUnitToBuilding = async (buildingId, unitData, unitImages, token)
 
   const { unitNumber, floor, category, price, deposit, description, sizeSqft } = unitData
 
-  // Fetch building details to get location and region
+  // Fetch building details to get location, region, max_units, locked, and total_units
   const { data: building } = await supabase
     .from('buildings')
-    .select('location, region')
+    .select('location, region, max_units, locked, total_units')
     .eq('id', buildingId)
     .single()
 
   if (!building) throw new Error('Building not found')
+
+  // Check if building is locked
+  if (building.locked) {
+    throw new Error('This building is locked. No more units can be added. Contact SuperAdmin to unlock.')
+  }
+
+  // Check if max_units is set and reached
+  if (building.max_units && building.total_units >= building.max_units) {
+    // Lock the building
+    await supabase
+      .from('buildings')
+      .update({ locked: true })
+      .eq('id', buildingId)
+    throw new Error('Maximum number of units reached. Building has been locked. Contact SuperAdmin to unlock.')
+  }
 
   // Create home as a unit in the building
   const { data: home, error: homeError } = await supabase
@@ -2384,17 +2402,20 @@ export const addUnitToBuilding = async (buildingId, unitData, unitImages, token)
     }
   }
 
-  // Update building's available_units count
+  // Update building's total_units and available_units count
   const { data: buildingForCount } = await supabase
     .from('buildings')
-    .select('available_units')
+    .select('total_units, available_units')
     .eq('id', buildingId)
     .single()
 
   if (buildingForCount) {
     await supabase
       .from('buildings')
-      .update({ available_units: buildingForCount.available_units + 1 })
+      .update({ 
+        total_units: buildingForCount.total_units + 1,
+        available_units: buildingForCount.available_units + 1
+      })
       .eq('id', buildingId)
   }
 
@@ -2410,6 +2431,131 @@ export const fetchBuildingDetails = async (buildingId, token) => {
 
   handleSupabaseError(error)
   return data
+}
+
+export const unlockBuilding = async (buildingId, token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  // Check if user is SuperAdmin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'SuperAdmin') {
+    throw new Error('Only SuperAdmin can unlock buildings')
+  }
+
+  const { data, error } = await supabase
+    .from('buildings')
+    .update({ locked: false })
+    .eq('id', buildingId)
+    .select()
+    .single()
+
+  handleSupabaseError(error)
+  return data
+}
+
+// Fetch buildings for tenants - includes buildings with available units AND buildings where tenant has approved unit
+export const fetchBuildingsForTenant = async (token) => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+  handleSupabaseError(userError)
+
+  // Fetch buildings with available units
+  const { data: availableBuildings, error: availableError } = await supabase
+    .from('buildings')
+    .select('*')
+    .gt('available_units', 0)
+    .order('created_at', { ascending: false })
+
+  handleSupabaseError(availableError)
+
+  // Fetch buildings where tenant has an approved application
+  const { data: approvedApps, error: appsError } = await supabase
+    .from('applications')
+    .select('home_id')
+    .eq('tenant_id', user.id)
+    .eq('status', 'approved')
+
+  if (appsError) {
+    console.error('Error fetching approved applications:', appsError)
+  }
+
+  let buildingIdsFromApps = []
+  if (Array.isArray(approvedApps) && approvedApps.length > 0) {
+    const homeIds = approvedApps.map(app => app.home_id)
+    
+    // Get building_ids from homes
+    const { data: homesWithBuilding } = await supabase
+      .from('homes')
+      .select('building_id')
+      .in('id', homeIds)
+    
+    if (Array.isArray(homesWithBuilding)) {
+      buildingIdsFromApps = [...new Set(homesWithBuilding.map(h => h.building_id).filter(Boolean))]
+    }
+  }
+
+  // Fetch full buildings where tenant has approved unit
+  let approvedUnitBuildings = []
+  if (buildingIdsFromApps.length > 0) {
+    const { data: fullBuildings } = await supabase
+      .from('buildings')
+      .select('*')
+      .in('id', buildingIdsFromApps)
+      .eq('available_units', 0)
+    
+    approvedUnitBuildings = fullBuildings || []
+  }
+
+  // Merge and deduplicate buildings
+  const allBuildings = Array.isArray(availableBuildings) ? availableBuildings : []
+  const mergedBuildings = [...allBuildings]
+  
+  approvedUnitBuildings.forEach(building => {
+    if (!mergedBuildings.find(b => b.id === building.id)) {
+      mergedBuildings.push(building)
+    }
+  })
+
+  // Fetch building images
+  const buildingIds = mergedBuildings.map(b => b.id)
+  let buildingImagesByBuilding = {}
+
+  if (buildingIds.length > 0) {
+    try {
+      const { data: buildingImages } = await supabase
+        .from('building_images')
+        .select('*')
+        .in('building_id', buildingIds)
+        .order('order_index', { ascending: true })
+
+      if (buildingImages) {
+        buildingImages.forEach(img => {
+          if (!buildingImagesByBuilding[img.building_id]) {
+            buildingImagesByBuilding[img.building_id] = []
+          }
+          buildingImagesByBuilding[img.building_id].push({
+            ...img,
+            url: img.image_url || img.url || img.image || '',
+          })
+        })
+      }
+    } catch (error) {
+      console.log('Error fetching building images:', error)
+    }
+  }
+
+  // Merge images into building data
+  return mergedBuildings.map(building => ({
+    ...building,
+    images: buildingImagesByBuilding[building.id] || [],
+    // Mark if this is a building where tenant has an approved unit
+    hasApprovedUnit: approvedUnitBuildings.find(b => b.id === building.id) !== undefined
+  }))
 }
 
 export const fetchBuildingImages = async (buildingId) => {

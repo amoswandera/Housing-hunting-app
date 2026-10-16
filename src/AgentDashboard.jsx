@@ -1960,8 +1960,9 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Region</th>
-                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Units</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Status</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
                       </tr>
                     </thead>
@@ -1986,8 +1987,17 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                             </td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.region}</td>
-                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>
+                              {building.total_units}{building.max_units ? ` / ${building.max_units}` : ''}
+                            </td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
+                            <td style={{ padding: '12px', fontSize: '13px' }}>
+                              {building.locked ? (
+                                <span style={{ background: '#fee2e2', color: '#dc2626', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>Locked</span>
+                              ) : (
+                                <span style={{ background: '#d1fae5', color: '#059669', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>Open</span>
+                              )}
+                            </td>
                             <td style={{ padding: '12px' }}>
                               <button
                                 onClick={async () => {
@@ -2006,12 +2016,25 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                               </button>
                               <button
                                 onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
-                                style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', marginRight: '8px' }}
+                                disabled={building.locked}
+                                style={{ 
+                                  background: building.locked ? '#9ca3af' : '#10b981', 
+                                  color: '#fff', 
+                                  border: 'none', 
+                                  borderRadius: '4px', 
+                                  padding: '6px 12px', 
+                                  fontSize: '11px', 
+                                  fontWeight: 600, 
+                                  cursor: building.locked ? 'not-allowed' : 'pointer', 
+                                  marginRight: '8px',
+                                  opacity: building.locked ? 0.6 : 1
+                                }}
+                                title={building.locked ? 'Building is locked. Contact SuperAdmin to unlock.' : 'Add unit to building'}
                               >
                                 + Add Unit
                               </button>
                               <button
-                                onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
+                                onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, maxUnits: building.max_units || '', description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
                                 style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 Edit
@@ -2048,8 +2071,9 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Building Name</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Location</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Region</th>
-                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Total Units</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Units</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Available</th>
+                        <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Status</th>
                         <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>Actions</th>
                       </tr>
                     </thead>
@@ -2074,8 +2098,17 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                             </td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.location}</td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.region}</td>
-                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.total_units}</td>
+                            <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>
+                              {building.total_units}{building.max_units ? ` / ${building.max_units}` : ''}
+                            </td>
                             <td style={{ padding: '12px', fontSize: '13px', color: '#6b7280' }}>{building.available_units}</td>
+                            <td style={{ padding: '12px', fontSize: '13px' }}>
+                              {building.locked ? (
+                                <span style={{ background: '#fee2e2', color: '#dc2626', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>Locked</span>
+                              ) : (
+                                <span style={{ background: '#d1fae5', color: '#059669', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>Open</span>
+                              )}
+                            </td>
                             <td style={{ padding: '12px' }}>
                               <button
                                 onClick={async () => {
@@ -2093,7 +2126,26 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                                 View Units
                               </button>
                               <button
-                                onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
+                                onClick={() => { setSelectedBuilding(building); setShowAddUnitForm(true) }}
+                                disabled={building.locked}
+                                style={{ 
+                                  background: building.locked ? '#9ca3af' : '#10b981', 
+                                  color: '#fff', 
+                                  border: 'none', 
+                                  borderRadius: '4px', 
+                                  padding: '6px 12px', 
+                                  fontSize: '11px', 
+                                  fontWeight: 600, 
+                                  cursor: building.locked ? 'not-allowed' : 'pointer', 
+                                  marginRight: '8px',
+                                  opacity: building.locked ? 0.6 : 1
+                                }}
+                                title={building.locked ? 'Building is locked. Contact SuperAdmin to unlock.' : 'Add unit to building'}
+                              >
+                                + Add Unit
+                              </button>
+                              <button
+                                onClick={() => { setEditingBuilding(building); setBuildingForm({ name: building.name, location: building.location, region: building.region, type: building.type, totalUnits: building.total_units, maxUnits: building.max_units || '', description: building.description || '', amenities: building.amenities ? building.amenities.join(', ') : '', customRegion: '' }); setShowBuildingForm(true); navigateTo('buildings') }}
                                 style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 Edit
@@ -2291,7 +2343,7 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 onNotify('Building created successfully.')
               }
 
-              setBuildingForm({ name: '', location: '', region: 'Nairobi County', type: 'apartment', totalUnits: '', description: '', amenities: '', customRegion: '' })
+              setBuildingForm({ name: '', location: '', region: 'Nairobi County', type: 'apartment', totalUnits: '', maxUnits: '', description: '', amenities: '', customRegion: '' })
               setBuildingImages([])
               setCategoryTemplates({})
               setShowBuildingForm(false)
@@ -2357,6 +2409,18 @@ function AgentDashboard({ token, onNotify, openProfileNonce, view = 'homes' }) {
                 required
                 style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
               />
+            </label>
+            <label style={{ display: 'block' }}>
+              <strong>Maximum Units (optional)</strong>
+              <input
+                type="number"
+                value={buildingForm.maxUnits}
+                onChange={(e) => setBuildingForm({ ...buildingForm, maxUnits: e.target.value })}
+                placeholder="Leave empty if no limit"
+                min="1"
+                style={{ width: '100%', padding: '8px', marginTop: '4px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+              />
+              <small style={{ color: '#6b7280', fontSize: '12px' }}>Set the maximum number of units allowed. Once reached, no more units can be added until SuperAdmin unlocks.</small>
             </label>
             <label style={{ display: 'block' }}>
               <strong>Description</strong>
