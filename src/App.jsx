@@ -2734,6 +2734,8 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
   const [homeSearch, setHomeSearch] = useState('')
   const [homeRegionFilter, setHomeRegionFilter] = useState('All regions')
   const [homeCategoryFilter, setHomeCategoryFilter] = useState('All categories')
+  const [buildingSearch, setBuildingSearch] = useState('')
+  const [buildingLocationFilter, setBuildingLocationFilter] = useState('')
   const [applicationSearch, setApplicationSearch] = useState('')
   const [applicationRegionFilter, setApplicationRegionFilter] = useState('All regions')
   const [applicationCategoryFilter, setApplicationCategoryFilter] = useState('All categories')
@@ -3511,6 +3513,13 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
                 <span>{buildings.length} building{buildings.length === 1 ? '' : 's'}</span>
               </div>
 
+              {/* Building Filters */}
+              <div className="users-toolbar" style={{ marginBottom: '16px' }}>
+                <div className="search-field admin-user-search"><span>⌕</span><input value={buildingSearch} onChange={e => setBuildingSearch(e.target.value)} placeholder="Search buildings" /></div>
+                <select className="role-filter" value={homeRegionFilter} onChange={e => setHomeRegionFilter(e.target.value)}><option value="All regions">All regions</option>{KENYA_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                <div className="search-field admin-user-search"><span>📍</span><input value={buildingLocationFilter} onChange={e => setBuildingLocationFilter(e.target.value)} placeholder="Filter by location" /></div>
+              </div>
+
               {/* Nested Cards for Buildings - Group by Region */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 {Array.from(new Set(buildings.map(b => b.region))).map(region => (
@@ -3536,7 +3545,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong style={{ fontSize: '28px', color: '#173d36', font: '400 32px Georgia, serif' }}>
-                        {buildings.filter(b => b.region === region).length}
+                        {buildings.filter(b => b.region === region && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase())) && (buildingLocationFilter === '' || b.location.toLowerCase().includes(buildingLocationFilter.toLowerCase()))).length}
                       </strong>
                       <span style={{ fontSize: '12px', color: '#9ba59f' }}>Total buildings</span>
                     </div>
@@ -3566,7 +3575,7 @@ function SuperAdminPanel({ token, currentUserId, onNotify, activeView }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {buildings.filter(b => b.region === expandedBuildingSection).map((building) => (
+                        {buildings.filter(b => b.region === expandedBuildingSection && (buildingSearch === '' || b.name.toLowerCase().includes(buildingSearch.toLowerCase()) || b.location.toLowerCase().includes(buildingSearch.toLowerCase())) && (buildingLocationFilter === '' || b.location.toLowerCase().includes(buildingLocationFilter.toLowerCase()))).map((building) => (
                           <tr key={building.id}>
                             <td>
                               <div className="users-table-name">
